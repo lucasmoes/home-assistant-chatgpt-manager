@@ -1,0 +1,24 @@
+name: Home Assistant ChatGPT Manager
+version: "0.1.0"
+slug: home_assistant_chatgpt_manager
+description: Manage Home Assistant configuration from ChatGPT through MCP.
+url: https://github.com/lucasmoes/home-assistant-chatgpt-manager
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+homeassistant_api: true
+ports:
+  8765/tcp: 8765
+ports_description:
+  8765/tcp: MCP server
+options:
+  api_key: null
+  write_access: true
+  log_level: info
+schema:
+  api_key: password
+  write_access: bool
+  log_level: "list(trace|debug|info|warning|error)"

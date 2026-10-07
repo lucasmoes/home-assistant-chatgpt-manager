@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "home-assistant-manager": {
+      "type": "streamable-http",
+      "url": "https://REPLACE-WITH-YOUR-PUBLIC-HOST/mcp"
+    }
+  }
+}

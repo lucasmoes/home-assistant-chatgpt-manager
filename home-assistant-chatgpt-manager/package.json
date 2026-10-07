@@ -1,0 +1,27 @@
+{
+  "name": "@llabs/home-assistant-chatgpt-manager",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.1.1",
+    "@modelcontextprotocol/server": "^2.3.1",
+    "ws": "^8.18.3",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
