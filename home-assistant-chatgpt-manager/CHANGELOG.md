@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Add safe MCP connection diagnostics: request method, origin category, authentication outcome and response status, without credentials or request contents.
+- Test OAuth-authenticated initialization, notifications and discovery of all 18 tools across separate stateless requests.
+
 ## 0.2.1
 
 - Fix browser sign-in and consent failing with `invalid_origin`: use a same-origin referrer policy on interaction pages so form submissions retain their Origin header.

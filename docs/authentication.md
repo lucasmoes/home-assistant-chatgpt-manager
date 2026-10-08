@@ -47,6 +47,10 @@ Form bodies are capped at 4 KiB, authorization starts at 60/minute, and interact
 
 The provider sees the configured canonical HTTPS host/protocol rather than caller-controlled forwarded headers. This does not provide TLS on port 8765: TLS termination at the tunnel remains required. Requests to MCP with an unrelated browser Origin are denied. Server-to-server clients normally omit Origin.
 
+## MCP connection diagnostics
+
+Version 0.2.2 logs `[mcp]` request/response lines with fixed method/origin categories, authentication outcome and HTTP status. It never logs Authorization values, cookies, URLs, RPC bodies or Home Assistant data. For action-discovery failures, retry once and inspect these lines: `missing-token`, `token-rejected`, `origin-rejected`, or `accepted` plus response status distinguish authentication from transport failures. If no request lines appear, check the saved MCP URL and tunnel/security routing. HTTP 200 confirms a transport response, not acceptance of tool schemas by the client.
+
 ## Validation
 
 Run `npm ci && npm test` in the add-on directory with Node 24+ and `jq` available. Tests run a real local HTTP bridge with temporary databases and no production Home Assistant credentials. They cover positive OAuth/MCP flows and security failures. The write test uses an unreachable Home Assistant target and must be rejected by the write gate before any HA request.

@@ -1,5 +1,5 @@
 name: Home Assistant ChatGPT Manager
-version: "0.2.1"
+version: "0.2.2"
 slug: home_assistant_chatgpt_manager
 description: Manage Home Assistant configuration from ChatGPT through MCP.
 url: https://github.com/lucasmoes/home-assistant-chatgpt-manager

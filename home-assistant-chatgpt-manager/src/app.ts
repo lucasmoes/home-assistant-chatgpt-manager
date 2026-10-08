@@ -19,16 +19,31 @@ export function createBridge(config: BridgeConfig) {
     try {
       const path = new URL(req.url ?? "/", "http://localhost").pathname;
       if (req.method === "GET" && (path === "/health" || path === "/")) {
-        json(200, { status: "ok", service: "home-assistant-chatgpt-manager", version: "0.2.1", write_access: config.writeAccess, oauth_enabled: !!oauth, mcp: "/mcp" }); return;
+        json(200, { status: "ok", service: "home-assistant-chatgpt-manager", version: "0.2.2", write_access: config.writeAccess, oauth_enabled: !!oauth, mcp: "/mcp" }); return;
       }
       if (oauth && await oauth.handle(req, res, path)) return;
       if (path !== "/mcp") { json(404, { error: "not_found" }); return; }
+      // Log only fixed categories and HTTP status: never bodies, URLs, headers,
+      // entity data, cookies or credentials. This makes discovery failures visible.
+      const method = ["GET", "POST", "DELETE", "OPTIONS"].includes(req.method ?? "") ? req.method : "OTHER";
+      let access = "pending";
+      const origin = !req.headers.origin ? "absent" : req.headers.origin === config.publicUrl ? "matching" : "rejected";
+      console.info(`[mcp] request method=${method} origin=${origin}`);
+      let logged = false;
+      const logOutcome = (event: "finish" | "close") => {
+        if (logged) return;
+        logged = true;
+        console.info(`[mcp] response method=${method} status=${res.statusCode} access=${access} event=${event}`);
+      };
+      res.once("finish", () => logOutcome("finish"));
+      res.once("close", () => logOutcome("close"));
       // Browser requests must originate from this deployment; server-to-server
       // MCP clients normally omit Origin. Never use wildcard CORS for credentials.
-      if (req.headers.origin && req.headers.origin !== config.publicUrl) { json(403, { error: "invalid_origin" }); return; }
+      if (req.headers.origin && req.headers.origin !== config.publicUrl) { access = "origin-rejected"; json(403, { error: "invalid_origin" }); return; }
       const token = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : "";
       const allowed = token.length > 0 && token.length <= 2048 &&
         ((config.allowLegacyApiKey && secretEqual(token, config.apiKey)) || !!(oauth && await oauth.accepts(token)));
+      access = allowed ? "accepted" : token ? "token-rejected" : "missing-token";
       if (!allowed) {
         if (oauth) oauth.challenge(res);
         else { res.setHeader("WWW-Authenticate", "Bearer"); json(401, { error: "unauthorized" }); }

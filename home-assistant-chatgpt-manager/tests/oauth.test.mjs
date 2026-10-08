@@ -109,6 +109,53 @@ test('browser login, consent, token, MCP access, restart persistence, refresh ro
   assert.equal((await f.mcp(second.access_token)).status, 401);
 });
 
+test('OAuth-authenticated clients initialize and discover all tools without a session id', async t => {
+  const f = await fixture(t);
+  const { code, verifier } = await f.authorize();
+  const tokens = await (await f.exchange(code, verifier)).json();
+  const headers = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${tokens.access_token}`, 'MCP-Protocol-Version': '2025-03-26' };
+  const call = body => f.request('/mcp', { method: 'POST', headers, body: JSON.stringify(body) });
+  const read = async response => {
+    assert.equal(response.status, 200);
+    const text = await response.text();
+    return JSON.parse(text.split('\n').find(line => line.startsWith('data: ')).slice(6));
+  };
+  const initialized = await call(init);
+  assert.equal(initialized.headers.get('mcp-session-id'), null);
+  assert.equal((await read(initialized)).result.protocolVersion, '2025-03-26');
+  assert.equal((await call({ jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
+  const listed = await read(await call({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }));
+  assert.equal(listed.result.tools.length, 18);
+  for (const tool of listed.result.tools) {
+    assert.equal(tool.inputSchema.type, 'object');
+    assert.ok(tool.name && tool.description);
+  }
+  assert.ok(listed.result.tools.some(tool => tool.name === 'create_automation'));
+  assert.ok(listed.result.tools.some(tool => tool.name === 'get_home_overview'));
+});
+
+test('MCP diagnostics distinguish token and origin failures without logging credentials or request data', async t => {
+  const f = await fixture(t);
+  const lines = [];
+  const original = console.info;
+  console.info = line => lines.push(line);
+  try {
+    assert.equal((await f.request('/mcp')).status, 401);
+    assert.equal((await f.request('/mcp?private-query', { method: 'POST', headers: { Authorization: 'Bearer secret-test-token', 'Content-Type': 'application/json' }, body: '{"private":"request-data"}' })).status, 401);
+    assert.equal((await f.request('/mcp', { headers: { Origin: 'https://private-origin.example' } })).status, 403);
+    const { code, verifier } = await f.authorize();
+    const tokens = await (await f.exchange(code, verifier)).json();
+    const response = await f.mcp(tokens.access_token);
+    await response.text();
+    const log = lines.join('\n');
+    assert.match(log, /status=401 access=missing-token/);
+    assert.match(log, /status=401 access=token-rejected/);
+    assert.match(log, /status=403 access=origin-rejected/);
+    assert.match(log, /status=200 access=accepted/);
+    for (const secret of [password, tokens.access_token, 'secret-test-token', 'private-query', 'request-data', 'private-origin.example']) assert.equal(log.includes(secret), false);
+  } finally { console.info = original; }
+});
+
 test('rejects wrong PKCE, reused code, wrong resource, and revokes tokens', async t => {
   const f = await fixture(t);
   let auth = await f.authorize();
