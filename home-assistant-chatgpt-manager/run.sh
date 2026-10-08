@@ -9,7 +9,7 @@ if [ ! -f "$OPTIONS_FILE" ]; then
 fi
 
 API_KEY="$(jq -r '.api_key // empty' "$OPTIONS_FILE")"
-WRITE_ACCESS_VALUE="$(jq -r '.write_access // true' "$OPTIONS_FILE")"
+WRITE_ACCESS_VALUE="$(jq -r 'if .write_access == null then true else .write_access end' "$OPTIONS_FILE")"
 LOG_LEVEL_VALUE="$(jq -r '.log_level // "info"' "$OPTIONS_FILE")"
 
 if [ -z "$API_KEY" ]; then

@@ -55,7 +55,7 @@ const server = createServer((request, response) => {
     sendJson(response, 200, {
       status: "ok",
       service: "home-assistant-chatgpt-manager",
-      version: "0.1.0",
+      version: "0.1.1",
       write_access: config.writeAccess,
     });
     return;

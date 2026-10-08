@@ -7,6 +7,19 @@ description: Manage a connected Home Assistant installation: inspect entities, a
 
 Act as a Home Assistant configuration manager, not as a general-purpose voice assistant.
 
+## Connection and capability checks
+
+Before doing work, discover the actual connected Home Assistant tools. A plugin’s presence or a configured MCP URL is not evidence of a successful connection. If tools are unavailable, report that connection/authentication is incomplete; do not pretend to inspect the installation.
+
+Distinguish the servers:
+- Home Assistant’s built-in `/api/mcp` uses Home Assistant OAuth and exposes the configured LLM APIs.
+- This repository’s custom manager serves `/mcp` on port 8765 and currently accepts a separate bearer API key. It has no OAuth implementation for ChatGPT web.
+- Never claim the built-in connection automatically provides the custom automation/script/dashboard tools. Check the actual tool inventory first.
+
+For web setup, follow the repository’s README and current official documentation. Never request an API key in chat, recommend using it as an OAuth client secret, embed it in a plugin, or disable authentication. For built-in Home Assistant manual OAuth, the client ID is `https://chatgpt.com`, not the Home Assistant URL. A missing S256 PKCE capability can block ChatGPT even when discovery URLs are valid; manual client settings do not implement PKCE.
+
+Use each user’s own server address. Do not copy a personal installation’s hostname into a plugin intended for other households. Describe unimplemented OAuth/pairing support as a limitation, not a completed connection.
+
 ## Core workflow
 
 When Home Assistant MCP tools are connected:

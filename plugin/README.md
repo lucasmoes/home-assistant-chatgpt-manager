@@ -1,19 +1,25 @@
-# ChatGPT plugin source
+# Home Assistant Manager plugin
 
-This folder contains the ChatGPT-side plugin package.
+This package provides management instructions. It does not itself deploy an MCP server or authenticate a user.
 
-## Current private MVP
+## Connect from ChatGPT web
 
-The plugin manifest and Home Assistant management skill can be installed privately now.
+Follow the [browser setup in the main README](../README.md#browser-setup-home-assistants-built-in-mcp) to connect Home Assistant’s built-in MCP using OAuth. Use your own Home Assistant URL. The built-in tools are separate from this repository’s custom management tools.
 
-The actual MCP server URL is **not** committed because there is not yet a stable public endpoint. `mcp.json.example` documents the binding.
+The custom add-on only accepts a bearer API key today. ChatGPT web requires OAuth; do not enter that key as an OAuth client secret or suggest that a tunnel alone completes setup.
 
-For the first end-to-end test:
+## Endpoint example
 
-1. Install/start the Home Assistant app.
-2. Expose port `8765` through a secure HTTPS tunnel.
-3. In ChatGPT, add a custom MCP server using `https://<tunnel>/mcp`.
-4. Configure bearer authentication with the app's `api_key`.
-5. Use the Home Assistant Manager plugin/skill in the same workflow.
+`mcp.json.example` is an inactive template for the **custom management bridge**. It is not loaded as a connection. Only copy it to `mcp.json` after you have a real endpoint compatible with your target client and have verified its authentication. A ChatGPT web deployment requires OAuth to be implemented first.
 
-After the LLabs gateway is deployed, copy `mcp.json.example` to `mcp.json`, replace the URL with the real stable HTTPS MCP endpoint, and update the private plugin. That final package will be shareable without each user editing plugin files.
+For the built-in server, create the connection in ChatGPT using your own `https://YOUR-HA-HOST/api/mcp` URL and the README’s OAuth instructions. Do not silently replace a custom management binding with the built-in endpoint: they expose different capabilities.
+
+Never put API keys or tokens in the package. Never publish a reusable package bound to a personal Home Assistant hostname. The privately installed owner-specific plugin may retain its own binding; it is not the distribution template.
+
+## Before release
+
+- Preserve the plugin name and default prompt; bump its version for updates.
+- Discover the actual connected tools before promising any capability.
+- Test a read-only tool after login and verify the target household.
+- Confirm that automation/script/dashboard tools really exist before testing writes.
+- The planned multi-user OAuth/pairing gateway is not implemented. See [its roadmap](../gateway/README.md).

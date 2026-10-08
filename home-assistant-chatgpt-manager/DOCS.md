@@ -1,6 +1,8 @@
 # Home Assistant ChatGPT Manager
 
-This app runs the MCP bridge next to Home Assistant.
+This app runs the custom MCP management bridge next to Home Assistant.
+
+**ChatGPT web is not yet supported by this bridge:** it uses a bearer API key and has no OAuth implementation. See the [main setup guide](../README.md) for the separate built-in Home Assistant OAuth connection, installation steps, and troubleshooting.
 
 ## Configuration
 
@@ -10,11 +12,11 @@ Required. Use a long random value. Clients must send it as a bearer token to `/m
 
 ### `write_access`
 
-When `false`, write tools remain visible but return a permission error. Read tools continue to work.
+When `false`, write tools remain visible but return a permission error. Read tools continue to work. Save and restart after changing it; verify the value at `/health`. Use version 0.1.1 or later: 0.1.0 incorrectly treated an explicit `false` as `true` at startup.
 
 ### `log_level`
 
-Controls bridge logging.
+Accepted logging preference. The current bridge loads this value but does not yet use it to filter log output.
 
 ## Endpoints
 

@@ -36,4 +36,6 @@ Home Assistant Core
 
 ## Not for v0.1
 
-For the private MVP use a temporary HTTPS tunnel directly to the Home Assistant app. This keeps the first milestone small and proves the MCP tool design before building multi-user infrastructure.
+A temporary HTTPS tunnel to the add-on works only with clients that can supply its bearer API key. It does not make the add-on compatible with ChatGPT web.
+
+Before advertising a working ChatGPT connection, implement and test OAuth discovery, authorization-code flow with S256 PKCE, login/consent, token expiry/revocation, and protected-resource validation. Before sharing one plugin across households, also implement pairing, installation isolation, and disconnect/revocation. Use an established OAuth provider where possible. The diagram above describes a planned service, not a deployed endpoint.
