@@ -157,6 +157,37 @@ test('rejects unsafe redirects, non-PKCE authorization, CSRF, bad password and a
   assert.equal((await f.post(path, { csrf, action: 'login', password: 'x'.repeat(5000) })).status, 413);
 });
 
+test('login and consent forms preserve browser Origin while rejecting null, missing and foreign origins', async t => {
+  const f = await fixture(t);
+  const { params } = f.authParams();
+  let response = await f.request('/oauth/authorize?' + params);
+  const loginPath = new URL(response.headers.get('location'), issuer).pathname;
+  response = await f.request(loginPath);
+  assert.equal(response.headers.get('referrer-policy'), 'same-origin');
+  const html = await response.text();
+  const csrf = html.match(/name="csrf" value="([^"]+)"/)[1];
+  for (const origin of ['null', 'https://evil.example', undefined]) {
+    const rejected = await f.request(loginPath, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...(origin === undefined ? {} : { Origin: origin }) },
+      body: new URLSearchParams({ csrf, action: 'login', password }),
+    });
+    assert.equal(rejected.status, 403);
+    assert.equal((await rejected.json()).error, 'invalid_origin');
+  }
+  response = await f.post(loginPath, { csrf, action: 'login', password });
+  // Follow the authorization resume redirect to the consent interaction.
+  for (let step = 0; step < 4 && response.status !== 200; step++) {
+    const location = new URL(response.headers.get('location'), issuer);
+    response = await f.request(location.pathname + location.search);
+  }
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('referrer-policy'), 'same-origin');
+  assert.match(await response.text(), /Allow connection/);
+  const discovery = await f.request('/.well-known/oauth-authorization-server');
+  assert.equal(discovery.headers.get('referrer-policy'), 'no-referrer');
+});
+
 test('owner may deny consent without issuing a code', async t => { await (await fixture(t)).authorize({ deny: true }); });
 
 test('configuration only accepts HTTPS origins and exact ChatGPT callback paths', () => {

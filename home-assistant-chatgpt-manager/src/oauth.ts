@@ -136,7 +136,9 @@ export class OAuthServer {
     }
     if (!path.startsWith("/oauth/") && !path.startsWith("/.well-known/") && !path.startsWith("/interaction/") && !path.startsWith("/auth/")) return false;
     res.setHeader("cache-control", "no-store");
-    res.setHeader("referrer-policy", "no-referrer");
+    // HTML form POSTs under no-referrer send Origin: null. Preserve the origin
+    // for login/consent while suppressing referrers to other origins.
+    res.setHeader("referrer-policy", path.startsWith("/interaction/") ? "same-origin" : "no-referrer");
     res.setHeader("x-content-type-options", "nosniff");
     res.setHeader("x-frame-options", "DENY");
     res.setHeader("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; frame-ancestors 'none'; base-uri 'none'");

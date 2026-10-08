@@ -41,7 +41,7 @@ The stored configuration fingerprint includes public URL, connection password, m
 
 ## Browser boundary
 
-Login/consent submissions require the canonical Origin, an interaction-bound HMAC CSRF value, and the provider's signed interaction cookie. Password comparisons use constant-time hashes. Cookies are Secure, HttpOnly, and SameSite=Lax. Interaction pages are not frameable and do not load third-party assets. HTML values are escaped. Only same-origin form actions and the ChatGPT return origin are permitted by CSP.
+Login/consent pages use `Referrer-Policy: same-origin` so browser form submissions retain their Origin without leaking referrers to other origins. Other OAuth endpoints retain `no-referrer`. Login/consent submissions require the canonical Origin, an interaction-bound HMAC CSRF value, and the provider's signed interaction cookie. Password comparisons use constant-time hashes. Cookies are Secure, HttpOnly, and SameSite=Lax. Interaction pages are not frameable and do not load third-party assets. HTML values are escaped. Only same-origin form actions and the ChatGPT return origin are permitted by CSP.
 
 Form bodies are capped at 4 KiB, authorization starts at 60/minute, and interaction POSTs at 20/minute across the instance. These fixed global counters deliberately do not trust caller-supplied IP headers. Users sharing an instance share these limits.
 

@@ -19,7 +19,7 @@ export function createBridge(config: BridgeConfig) {
     try {
       const path = new URL(req.url ?? "/", "http://localhost").pathname;
       if (req.method === "GET" && (path === "/health" || path === "/")) {
-        json(200, { status: "ok", service: "home-assistant-chatgpt-manager", version: "0.2.0", write_access: config.writeAccess, oauth_enabled: !!oauth, mcp: "/mcp" }); return;
+        json(200, { status: "ok", service: "home-assistant-chatgpt-manager", version: "0.2.1", write_access: config.writeAccess, oauth_enabled: !!oauth, mcp: "/mcp" }); return;
       }
       if (oauth && await oauth.handle(req, res, path)) return;
       if (path !== "/mcp") { json(404, { error: "not_found" }); return; }

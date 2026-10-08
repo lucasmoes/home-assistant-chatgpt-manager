@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Fix browser sign-in and consent failing with `invalid_origin`: use a same-origin referrer policy on interaction pages so form submissions retain their Origin header.
+- Keep strict origin validation, CSRF checks and no-referrer policy on other OAuth endpoints.
+
 ## 0.2.0
 
 - Add browser OAuth using oidc-provider: required S256 PKCE, ChatGPT CIMD/signed-client support, exact-callback public-client fallback, owner login and consent.

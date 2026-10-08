@@ -21,7 +21,7 @@ In Home Assistant:
 
 1. Go to **Settings → Apps → App store → menu → Repositories**. Older releases call Apps “Add-ons.”
 2. Add `https://github.com/lucasmoes/home-assistant-chatgpt-manager`.
-3. Install **Home Assistant ChatGPT Manager**, or refresh/check for updates and update your existing installation to **0.2.0 or later**.
+3. Install **Home Assistant ChatGPT Manager**, or refresh/check for updates and update your existing installation to **0.2.1 or later**.
 4. Open **Configuration** and set the connection password (`api_key`). Keep it in your password manager. Do not paste it into a ChatGPT message.
 
 ### 2. Route a dedicated HTTPS hostname to the add-on
@@ -123,6 +123,7 @@ To allow edits, set `write_access: true`, save/restart, and reconnect OAuth so y
 | PKCE/S256 error | Check the discovery JSON at the add-on hostname. Version 0.2.0 advertises and enforces S256. If absent, check the route and installed version. |
 | Registration endpoint missing | Select CIMD/automatic metadata or manual public client; this server does not implement DCR. |
 | Invalid redirect/client | Use the custom manager’s client ID and endpoints above, not built-in Home Assistant OAuth settings. For manual setup copy the exact callback into `oauth_redirect_uri`. |
+| `invalid_origin` when submitting sign-in or consent | Update the add-on to 0.2.1 or later, then start a fresh connection. Version 0.2.0 sent a referrer policy that caused browsers to submit `Origin: null`. |
 | Login expired / interaction error | Enable cookies, use the public HTTPS hostname, and start Connect again. Login interactions expire after 10 minutes. |
 | Wrong password | Enter the add-on’s connection password, not a Home Assistant account password. After 20 POST attempts in a minute, wait a minute. |
 | Login works but MCP returns 401 | Reconnect after password, URL, callback, or write-permission changes. Verify you are still using the correct `/mcp` endpoint. |
