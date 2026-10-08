@@ -104,7 +104,7 @@ export function buildMcpServer(
 ): McpServer {
   const server = new McpServer({
     name: "home-assistant-chatgpt-manager",
-    version: "0.1.1",
+    version: "0.2.0",
   });
 
   server.registerTool(

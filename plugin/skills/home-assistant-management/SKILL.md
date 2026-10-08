@@ -9,16 +9,15 @@ Act as a Home Assistant configuration manager, not as a general-purpose voice as
 
 ## Connection and capability checks
 
-Before doing work, discover the actual connected Home Assistant tools. A plugin’s presence or a configured MCP URL is not evidence of a successful connection. If tools are unavailable, report that connection/authentication is incomplete; do not pretend to inspect the installation.
+Discover the actual connected tools before doing work. A plugin card or a URL in its manifest is not evidence of a successful connection. If tools are unavailable, report incomplete connection/authentication rather than pretending to inspect the installation.
 
-Distinguish the servers:
-- Home Assistant’s built-in `/api/mcp` uses Home Assistant OAuth and exposes the configured LLM APIs.
-- This repository’s custom manager serves `/mcp` on port 8765 and currently accepts a separate bearer API key. It has no OAuth implementation for ChatGPT web.
-- Never claim the built-in connection automatically provides the custom automation/script/dashboard tools. Check the actual tool inventory first.
+The custom manager (add-on version 0.2.0+) serves `/mcp` on port 8765 with OAuth for ChatGPT web. No desktop app, local proxy or laptop process is needed. Home Assistant Core's built-in `/api/mcp` is a different server with different tools; connecting it does not install the custom management tools.
 
-For web setup, follow the repository’s README and current official documentation. Never request an API key in chat, recommend using it as an OAuth client secret, embed it in a plugin, or disable authentication. For built-in Home Assistant manual OAuth, the client ID is `https://chatgpt.com`, not the Home Assistant URL. A missing S256 PKCE capability can block ChatGPT even when discovery URLs are valid; manual client settings do not implement PKCE.
+For setup, use the repository README. Each household needs its own add-on and public HTTPS hostname routed to the entire add-on, including discovery and OAuth routes. The `public_url` option is the HTTPS origin without `/mcp`. Prefer ChatGPT automatic CIMD. The fallback static client ID is `home-assistant-manager`, token authentication is `none`, and endpoints are `/oauth/authorize` and `/oauth/token`. Do not confuse these with built-in Home Assistant OAuth settings.
 
-Use each user’s own server address. Do not copy a personal installation’s hostname into a plugin intended for other households. Describe unimplemented OAuth/pairing support as a limitation, not a completed connection.
+The owner enters the add-on's connection password (`api_key`, at least 32 random characters) only on the add-on's browser sign-in page. Never request or reveal it in chat, embed it in a plugin, use it as an OAuth client secret, or disable authentication. OAuth access uses S256 PKCE and expiring tokens; direct API-key access is opt-in developer compatibility.
+
+Changing password, public URL, manual callback or write permission and restarting revokes OAuth grants; reconnect and approve access again. Ordinary restarts preserve sessions. A privately installed plugin may still point to an old built-in endpoint: only change a binding after the actual custom add-on URL is known. Do not invent a live hostname or claim the update has deployed itself to Home Assistant.
 
 ## Core workflow
 

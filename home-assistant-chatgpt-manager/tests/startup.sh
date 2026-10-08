@@ -21,8 +21,8 @@ check() {
 }
 check '{"api_key":"test-only","write_access":false}' false
 check '{"api_key":"test-only","write_access":true}' true
-check '{"api_key":"test-only"}' true
-check '{"api_key":"test-only","write_access":null}' true
+check '{"api_key":"test-only"}' false
+check '{"api_key":"test-only","write_access":null}' false
 printf '%s\n' '{"write_access":false}' > "$TEST_DIR/options.json"
 if PATH="$TEST_DIR/bin:$PATH" sh "$TEST_DIR/run.sh" > "$TEST_DIR/error.txt" 2>&1; then
   printf 'Missing key should prevent startup\n' >&2

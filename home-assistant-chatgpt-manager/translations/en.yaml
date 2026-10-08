@@ -1,12 +1,21 @@
 configuration:
   api_key:
-    name: MCP API key
-    description: Strong bearer token required to access the MCP endpoint.
+    name: Connection password
+    description: Use at least 32 random characters. Enter this only on the add-on’s browser sign-in page, never in ChatGPT messages. Changing it and restarting revokes all OAuth sessions.
+  public_url:
+    name: Public HTTPS address
+    description: Dedicated HTTPS origin routed to this add-on on port 8765, without /mcp. Leave blank to disable OAuth.
+  oauth_redirect_uri:
+    name: ChatGPT callback URL
+    description: Used for manual OAuth configuration. Copy the exact callback shown by ChatGPT if it differs from the default. Automatic CIMD reads ChatGPT’s published callbacks.
+  allow_legacy_api_key:
+    name: Allow direct API-key clients
+    description: Optional compatibility for developer MCP clients. Leave disabled for ChatGPT web.
   write_access:
     name: Allow configuration writes
-    description: Allow ChatGPT to create or update automations, scripts, and dashboards.
+    description: Allow creating and updating automations, scripts and dashboards. Changing this setting requires reconnecting OAuth after restart.
   log_level:
     name: Log level
-    description: Logging verbosity for the bridge.
+    description: Reserved logging preference; current output is not filtered by this value.
 network:
-  8765/tcp: MCP server
+  8765/tcp: MCP and OAuth server

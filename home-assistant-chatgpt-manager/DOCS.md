@@ -1,48 +1,41 @@
 # Home Assistant ChatGPT Manager
 
-This app runs the custom MCP management bridge next to Home Assistant.
-
-**ChatGPT web is not yet supported by this bridge:** it uses a bearer API key and has no OAuth implementation. See the [main setup guide](../README.md) for the separate built-in Home Assistant OAuth connection, installation steps, and troubleshooting.
+Version 0.2.0 supports OAuth for **ChatGPT web**. Use the [step-by-step browser setup](../README.md#set-up-in-the-browser). No desktop app or laptop service is needed.
 
 ## Configuration
 
-### `api_key`
+| Option | Purpose |
+| --- | --- |
+| `api_key` | Connection password, at least 32 random characters with OAuth enabled. Enter it only on the add-on sign-in page. |
+| `public_url` | Dedicated public HTTPS origin routed to port 8765, without a path. Enables OAuth; blank disables it. |
+| `oauth_redirect_uri` | Exact ChatGPT callback for the fallback static client; automatic CIMD uses published ChatGPT metadata. |
+| `allow_legacy_api_key` | Default false. Explicitly allow bearer-password clients for developer compatibility. |
+| `write_access` | Default false for new installations. Allow creating/updating configuration when true. |
+| `log_level` | Reserved logging preference; currently loaded but not applied as a log filter. |
 
-Required. Use a long random value. Clients must send it as a bearer token to `/mcp`.
-
-### `write_access`
-
-When `false`, write tools remain visible but return a permission error. Read tools continue to work. Save and restart after changing it; verify the value at `/health`. Use version 0.1.1 or later: 0.1.0 incorrectly treated an explicit `false` as `true` at startup.
-
-### `log_level`
-
-Accepted logging preference. The current bridge loads this value but does not yet use it to filter log output.
-
-## Endpoints
-
-- `GET /health` — unauthenticated liveness check
-- `/mcp` — authenticated Streamable HTTP MCP endpoint
+Save and restart after changes. Changes to the password, public URL, callback, or write policy revoke all OAuth sessions/grants; reconnect in ChatGPT afterwards. `/health` reports the running OAuth/write state. It does not check Home Assistant API access.
 
 ## Home Assistant access
 
-When installed as a Home Assistant app, the bridge talks to Home Assistant Core through:
-
-- REST: `http://supervisor/core/api`
-- WebSocket: `ws://supervisor/core/websocket`
-
-It authenticates with the `SUPERVISOR_TOKEN` injected by Home Assistant.
+The add-on uses Supervisor's injected `SUPERVISOR_TOKEN` with `http://supervisor/core/api` and `ws://supervisor/core/websocket`. The token stays inside Home Assistant. No long-lived Home Assistant token is required for the add-on installation.
 
 ## Development outside Home Assistant
 
-You can run the bridge outside Home Assistant by setting:
+Requires Node 24+. Supply environment variables using a private environment/secret configuration:
 
 ```text
 HA_BASE_URL=http://homeassistant.local:8123/api
 HA_WS_URL=ws://homeassistant.local:8123/api/websocket
-HA_TOKEN=<long-lived-access-token>
-BRIDGE_API_KEY=<development-key>
-WRITE_ACCESS=true
+HA_TOKEN=<your-home-assistant-token>
+BRIDGE_API_KEY=<your-random-connection-password>
+PUBLIC_URL=https://your-manager-host
+OAUTH_DATA_DIR=./.oauth
+OAUTH_REDIRECT_URI=https://chatgpt.com/connector_platform_oauth_redirect
+ALLOW_LEGACY_API_KEY=false
+WRITE_ACCESS=false
 PORT=8765
 ```
 
-Then run `npm install && npm run dev`.
+Run `npm ci`, then `npm run dev`. OAuth requires an HTTPS tunnel to the local port. For a local bearer-only development client, omit `PUBLIC_URL` and explicitly set `ALLOW_LEGACY_API_KEY=true`. Never commit tokens, the `.oauth` directory, or add-on data.
+
+Run `npm test` for the build, OAuth/MCP HTTP tests, and startup regression tests (`jq` required). See the [authentication design](../docs/authentication.md).

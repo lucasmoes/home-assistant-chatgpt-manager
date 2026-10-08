@@ -1,151 +1,149 @@
 # Home Assistant ChatGPT Manager
 
-Manage Home Assistant configuration with MCP tools for entities, automations, scripts, and dashboards.
+Connect **ChatGPT web** to a Home Assistant add-on that can inspect entities and manage automations, scripts, and dashboards. Your laptop does not run the connection. No desktop ChatGPT app, local MCP proxy, or terminal is required for normal setup.
 
-> **Connection status:** the custom management add-on currently uses a bearer API key. It does **not** yet implement the OAuth flow required by ChatGPT web. Installing it and adding a tunnel is not enough to connect it to ChatGPT. The browser setup below connects **Home Assistant’s built-in MCP server**, which is a separate service with different tools.
+**Version 0.2.0 adds browser-based OAuth authentication.** Install/update the add-on, give it a public HTTPS address, and sign in from ChatGPT. Each person connects to their own Home Assistant installation.
 
-## Choose your setup
+> The implementation is covered by automated OAuth/MCP integration tests. A live ChatGPT connection to a user's installed add-on still needs to be verified after deployment. The shared multi-household gateway remains a separate future feature.
 
-| What you want | Setup | Current status |
-| --- | --- | --- |
-| Connect ChatGPT in a browser to Home Assistant’s exposed LLM tools | [Browser setup](#browser-setup-home-assistants-built-in-mcp) | Uses Home Assistant OAuth; compatibility depends on your Core version and the client’s OAuth requirements |
-| Use this repository’s automation, script, and dashboard management tools | [Custom add-on](#custom-management-add-on) | Available to MCP clients that accept a bearer API key; ChatGPT web OAuth is not implemented |
-| Give other people one plugin that connects to their own home | [Sharing](#sharing-with-other-people) | Requires the planned OAuth/pairing gateway; not available yet |
+## What you need
 
-No terminal on your computer is needed for the browser setup if you already have a working public HTTPS Home Assistant address.
+- Home Assistant with the app/add-on store (usually Home Assistant OS), on `amd64` or `aarch64`.
+- ChatGPT web with **Add custom MCP server** available on your account/workspace.
+- A dedicated public HTTPS address routed to the add-on on **port 8765**, for example through Cloudflare Tunnel. An existing Home Assistant Cloud URL routes to Core; it does not automatically expose this add-on.
+- A password manager to generate a unique connection password of at least 32 random characters.
 
-## Browser setup: Home Assistant’s built-in MCP
+## Set up in the browser
 
-### 1. Prepare Home Assistant
+### 1. Install or update the add-on
 
-1. Open Home Assistant in your browser. Record your **Home Assistant Core version** from Settings → About; use a supported, up-to-date release.
-2. Open **Settings → Devices & services → Add integration** and add **Model Context Protocol Server**. Select the **Server** integration, not the “Model Context Protocol” client integration.
-3. Review the integration’s configuration and select the LLM APIs/entities you want to expose. If the integration requires an administrator, use an administrator account when connecting.
-4. You need a public HTTPS address that reaches Home Assistant, such as your Home Assistant Cloud remote URL or your own reverse proxy/tunnel. A local IP address or `homeassistant.local` is not reachable from ChatGPT’s servers.
-5. For a custom domain, set Home Assistant’s **Settings → System → Network → Home Assistant URL / External URL** to that exact HTTPS origin. Configure trusted proxy headers according to the [HTTP integration documentation](https://www.home-assistant.io/integrations/http/#reverse-proxies) when using a reverse proxy.
+In Home Assistant:
 
-In the examples below, replace `https://YOUR-HA-HOST` with **your own** public Home Assistant address. Do not use someone else’s server.
-
-### 2. Add the MCP connection in ChatGPT
-
-Open **Plugins → Add custom MCP server**. Some ChatGPT surfaces label this **Settings → Apps → Advanced settings / Developer mode → Create**. Availability and labels depend on your account/workspace. If the option is absent, check your workspace’s app/developer settings.
-
-Enter:
-
-| Field | Value |
-| --- | --- |
-| Name | Home Assistant — My Home |
-| MCP server URL | `https://YOUR-HA-HOST/api/mcp` |
-| Authentication | OAuth |
-
-Try the advertised OAuth discovery first. If client registration fails and manual OAuth settings are available, use **Advanced OAuth settings → User-defined OAuth client**:
-
-| Field | Value |
-| --- | --- |
-| OAuth client ID | `https://chatgpt.com` |
-| OAuth client secret | Leave blank if optional; otherwise enter placeholder text such as `unused` |
-| Token endpoint authentication method | `client_secret_post` |
-| Authorization URL | `https://YOUR-HA-HOST/auth/authorize` |
-| Token URL | `https://YOUR-HA-HOST/auth/token` |
-| Authorization server base / issuer | `https://YOUR-HA-HOST` |
-
-Home Assistant ignores the client secret. **Do not enter the add-on API key, a Home Assistant access token, or your Home Assistant password into that field.** The client ID is ChatGPT’s origin, not your Home Assistant URL.
-
-These manual values address client-registration issues. They do not add missing PKCE support to the server. If ChatGPT reports a PKCE/S256 error, see [Troubleshooting](#troubleshooting) before retrying.
-
-### 3. Authorize and verify
-
-1. Create/save the connection and install or connect the resulting plugin when prompted.
-2. Complete the sign-in on **your Home Assistant website**, then approve the connection and return to ChatGPT.
-3. Start a new chat, select the connected Home Assistant plugin, and ask: **“List the available Home Assistant tools and show a read-only overview. Do not change anything.”**
-4. Confirm that actual tool results come back from your home. A visible plugin card or a generated YAML suggestion alone does not prove that it is connected.
-
-The built-in endpoint exposes the configured Home Assistant LLM APIs. Connecting it does **not** install this repository’s `create_automation`, `update_script`, or `save_dashboard` tools. Check the actual available tools before expecting those management features.
-
-## Custom management add-on
-
-Use this section for the custom tools implemented in this repository. It is currently a developer setup for an MCP client with bearer-header support, **not a working ChatGPT web connection recipe**.
-
-### 1. Install
-
-Requires Home Assistant with an app/add-on store (typically Home Assistant OS), on `amd64` or `aarch64`.
-
-1. Open **Settings → Apps → App store → menu → Repositories**. Older releases call Apps “Add-ons.”
+1. Go to **Settings → Apps → App store → menu → Repositories**. Older releases call Apps “Add-ons.”
 2. Add `https://github.com/lucasmoes/home-assistant-chatgpt-manager`.
-3. Find **Home Assistant ChatGPT Manager** and install it.
-4. In Configuration, set `api_key` to a unique random password generated by your password manager (at least 32 random characters is recommended).
-5. Set `write_access: false` for the first connection test, save, and start the app.
-6. Open the app’s Logs tab and confirm it is listening on port `8765`.
+3. Install **Home Assistant ChatGPT Manager**, or refresh/check for updates and update your existing installation to **0.2.0 or later**.
+4. Open **Configuration** and set the connection password (`api_key`). Keep it in your password manager. Do not paste it into a ChatGPT message.
 
-If the repository is private, the normal repository URL installation is not sufficient. A developer must copy the add-on folder into `/addons/home-assistant-chatgpt-manager` and reload the store. Do not embed GitHub credentials in the repository URL.
+### 2. Route a dedicated HTTPS hostname to the add-on
 
-Home Assistant Container/Core installations without Supervisor cannot use this store installation. See [development configuration](home-assistant-chatgpt-manager/DOCS.md#development-outside-home-assistant).
+For example, if you already use Cloudflare Tunnel, add a published application route to your existing tunnel:
 
-### 2. Verify the add-on
+| Route field | Example |
+| --- | --- |
+| Public hostname | `ha-manager.YOUR-DOMAIN` |
+| Service type | HTTP |
+| Service URL | `http://YOUR-HA-LAN-IP:8765` |
+| Path filter | Leave blank: route the entire hostname |
 
-From your local network, open `http://YOUR-HA-IP:8765/health` in a browser. It should return:
+Use the Home Assistant address reachable **from the tunnel connector**. If its dashboard provides separate Type and URL fields, select HTTP and enter only `YOUR-HA-LAN-IP:8765` in URL. Keep the existing Home Assistant dashboard route separate.
 
-```json
-{"status":"ok","service":"home-assistant-chatgpt-manager","version":"0.1.1","write_access":false}
-```
+The whole hostname must reach this add-on: `/mcp`, `/oauth/*`, `/interaction/*`, and `/.well-known/*` are all needed. Preserve request methods, query strings, cookies, and Authorization headers. A separate Cloudflare Access sign-in page can block ChatGPT’s server-to-server requests; this endpoint uses the add-on’s own OAuth login. Do not expose port 8765 directly to the public internet.
 
-This checks that the bridge is running; it does not prove that Home Assistant API calls or MCP authentication work.
+### 3. Configure and start the add-on
 
-In a compatible MCP client, set:
+Fill in these settings through Home Assistant’s configuration form:
+
+| Setting | Value |
+| --- | --- |
+| `api_key` / Connection password | Your generated password, at least 32 characters |
+| `public_url` / Public HTTPS address | `https://ha-manager.YOUR-DOMAIN` — **no `/mcp` suffix** |
+| `oauth_redirect_uri` | Leave the default for now |
+| `allow_legacy_api_key` | `false` |
+| `write_access` | `false` for read-only access; `true` to allow configuration changes |
+
+Save and start/restart the add-on. Open `https://ha-manager.YOUR-DOMAIN/health` in your browser. Confirm `version` is `0.2.0` or later and `oauth_enabled` is `true`.
+
+Also open `https://ha-manager.YOUR-DOMAIN/.well-known/oauth-authorization-server`. It should return JSON with your HTTPS issuer, OAuth endpoints, and `code_challenge_methods_supported: ["S256"]`.
+
+These checks show that routing and discovery work; the next step verifies login and MCP access.
+
+### 4. Connect in ChatGPT web
+
+Open **Plugins → Add custom MCP server**. Some surfaces call this **Settings → Apps → Advanced settings / Developer mode → Create**.
 
 | Field | Value |
 | --- | --- |
-| Transport | Streamable HTTP |
-| URL | `http://YOUR-HA-IP:8765/mcp` on a trusted local network |
-| Request header | `Authorization: Bearer <the add-on api_key>` |
+| Name | Home Assistant Manager — My Home |
+| MCP URL | `https://ha-manager.YOUR-DOMAIN/mcp` |
+| Authentication | OAuth |
+| Client registration, if offered | Automatic / Client ID Metadata Document (CIMD) |
 
-Use the client’s secure credential settings. Do not commit the key in `mcp.json` or share it in a chat. An unauthenticated request to `/mcp` should return `401`; that is expected.
+Save/install the connection. Choose **Connect** when prompted. Your browser opens the add-on’s **Connect your home** page:
 
-Run `get_home_overview` as the first read-only test. Enable `write_access` in the add-on configuration and restart it only when you want to allow configuration changes. Confirm `/health` reports the intended value after a restart.
+1. Check that the address is your dedicated add-on hostname.
+2. Enter the connection password from `api_key`. This is **not** your Home Assistant account password.
+3. Review the access requested and choose **Allow connection**.
+4. Return to ChatGPT and start a new chat with the connected plugin selected.
 
-### 3. Remote access and ChatGPT web
+The add-on fetches ChatGPT’s published client metadata and validates signed client assertions when requested. You do not need to create a client secret or install desktop software.
 
-For a bearer-capable remote client, a dedicated HTTPS tunnel hostname must route to the **add-on’s port 8765**, preserving `/mcp` and the Authorization header. A hostname routed to Home Assistant’s port 8123 reaches a different server. Use HTTPS for remote credentials; never forward an unauthenticated management endpoint to the internet.
+#### Manual OAuth fallback
 
-For **ChatGPT web**, stop here: the add-on still needs an OAuth 2.1 authorization-code flow with S256 PKCE, discovery metadata, token validation, and an appropriate login/consent flow. A URL in the plugin manifest does not implement any of these. Do not disable authentication to make the connection succeed.
+If automatic client registration is unavailable, use **User-defined OAuth client**:
+
+| Field | Value |
+| --- | --- |
+| Client ID | `home-assistant-manager` |
+| Client secret | Leave empty |
+| Token endpoint auth method | `none` (public client with required PKCE) |
+| Authorization URL | `https://ha-manager.YOUR-DOMAIN/oauth/authorize` |
+| Token URL | `https://ha-manager.YOUR-DOMAIN/oauth/token` |
+| Authorization server / issuer | `https://ha-manager.YOUR-DOMAIN` |
+| Scope, if requested | `ha:manage` |
+
+Copy the **exact callback URL shown by ChatGPT** into the add-on’s `oauth_redirect_uri`, save, and restart. The default is `https://chatgpt.com/connector_platform_oauth_redirect`; callback-specific `https://chatgpt.com/connector/oauth/...` URLs are also accepted. Wildcards and non-ChatGPT callbacks are rejected.
+
+If your UI requires a client secret and cannot select `none`, use automatic CIMD instead. Do **not** substitute your connection password as an OAuth client secret. Dynamic Client Registration (DCR) is not exposed; choose CIMD or the manual public-client settings above.
+
+### 5. Verify the connection
+
+Ask ChatGPT:
+
+> Use get_home_overview to inspect my Home Assistant. Do not change anything.
+
+Confirm real tool results return. Then ask it to list existing automations or dashboards. A visible plugin card or generated YAML is not proof of a connection.
+
+To allow edits, set `write_access: true`, save/restart, and reconnect OAuth so you can approve the increased access. The tools include `create_automation`, `update_automation`, `create_script`, `update_script`, `create_dashboard`, and `save_dashboard`.
+
+## Upgrading an existing connection
+
+- **Old URL ends with `/api/mcp`:** that is Home Assistant’s built-in MCP server, not this manager. Create/update the ChatGPT connection to your dedicated add-on address ending in `/mcp`. Updating the plugin’s instructions alone cannot change your tunnel or install the new add-on.
+- **Old bearer client:** direct API-key authentication now requires `allow_legacy_api_key: true`. Leave it off for ChatGPT web.
+- Existing Home Assistant settings may retain their previous values. Check `write_access` explicitly after updating.
+- The built-in MCP Server integration is not required for this add-on. Do not change its OAuth settings using this guide: it is a different server.
 
 ## Troubleshooting
 
-| Symptom | Check / next action |
+| Symptom | Action |
 | --- | --- |
-| Plugin appears, but no Home Assistant tools | Installing instructions is separate from connecting a server. Complete the MCP connection and use a new chat. |
-| `/api/mcp` versus `/mcp` confusion | `/api/mcp` belongs to Home Assistant Core. `/mcp` on port 8765 belongs to this add-on. Their credentials and tools differ. |
-| OAuth client registration / `invalid_client` error | For built-in MCP, use the manual settings above. Home Assistant advertises client-ID metadata documents rather than a DCR registration endpoint. |
-| PKCE or `S256` error | Open `https://YOUR-HA-HOST/.well-known/oauth-authorization-server`. ChatGPT requires advertised `code_challenge_methods_supported` containing `S256`. Missing metadata is a compatibility blocker; check for a Core update that implements the required support. If still missing, direct connection remains blocked. Do not just inject the field into a proxy: the authorization/token implementation must enforce PKCE too. |
-| Invalid issuer or relative OAuth URLs | Confirm External URL and forwarded headers. The discovery document must have the exact public HTTPS issuer and absolute authorization/token URLs. |
-| Cloudflare login page instead of OAuth metadata | An extra proxy login can prevent ChatGPT from reaching MCP/discovery. Configure the intended authenticated MCP access path; a successful browser session alone does not prove server-to-server access. |
-| `401 Unauthorized` before sign-in | Expected for a protected endpoint. After sign-in, check which server you connected to and its credential type. An add-on key will not authenticate built-in MCP. |
-| Add-on `Missing ... BRIDGE_API_KEY` | Set its `api_key`, save, and restart. |
-| `/health` works but tools fail | Check add-on logs for Supervisor/Core access errors; health is only a liveness check. |
-| Writes disabled | Check `write_access`, save/restart the add-on, and read `/health` again. Version 0.1.1 fixes a startup bug that ignored an explicit `false`. |
-| Login works but management tools are missing | Built-in MCP and the custom manager expose different tools. Connecting the former does not enable the latter. |
+| No custom MCP option in ChatGPT | Check account/workspace availability and developer/app settings. The add-on cannot enable a missing ChatGPT feature. |
+| `/health` returns Home Assistant HTML, 404, or a proxy sign-in page | The hostname must reach the add-on on port **8765**, not Core on 8123, and all paths must be routed. |
+| `oauth_enabled: false` | Set `public_url` to the dedicated HTTPS origin, save, and restart. |
+| Startup rejects the password | Use at least 32 characters for `api_key`; generate a random password. |
+| PKCE/S256 error | Check the discovery JSON at the add-on hostname. Version 0.2.0 advertises and enforces S256. If absent, check the route and installed version. |
+| Registration endpoint missing | Select CIMD/automatic metadata or manual public client; this server does not implement DCR. |
+| Invalid redirect/client | Use the custom manager’s client ID and endpoints above, not built-in Home Assistant OAuth settings. For manual setup copy the exact callback into `oauth_redirect_uri`. |
+| Login expired / interaction error | Enable cookies, use the public HTTPS hostname, and start Connect again. Login interactions expire after 10 minutes. |
+| Wrong password | Enter the add-on’s connection password, not a Home Assistant account password. After 20 POST attempts in a minute, wait a minute. |
+| Login works but MCP returns 401 | Reconnect after password, URL, callback, or write-permission changes. Verify you are still using the correct `/mcp` endpoint. |
+| Health works but Home Assistant reads fail | Health is only a liveness check. Inspect add-on logs for Supervisor/Core API access problems. |
+| Writes disabled | Enable `write_access`, save/restart, and reconnect OAuth to approve the change. |
+| Changed the public URL | Update `public_url`, restart, and update/recreate the ChatGPT connection with the new address. |
 
-When reporting a problem, include Core version, add-on version, endpoint path, exact error, and sanitized logs. Never include passwords, API keys, access/refresh tokens, or OAuth authorization codes.
+Include versions, endpoint path, exact error, and sanitized logs when reporting issues. Never include passwords, tokens, cookies, or authorization codes.
 
-## Sharing with other people
+## Authentication and access
 
-Each household needs its **own** Home Assistant instance and authorization. Do not distribute a plugin bound to your personal hostname as a general installer.
+The add-on uses the maintained [`oidc-provider`](https://github.com/panva/node-oidc-provider) library for authorization-code OAuth, S256 PKCE, token issuance, rotation, revocation, and client authentication. Access tokens last 10 minutes; refresh tokens rotate and grants expire after 30 days. Reusing a consumed refresh token revokes its grant. You may need to reconnect after grant expiry.
 
-The [`plugin/`](plugin/) folder contains reusable management instructions and an **inactive** endpoint example. It intentionally contains no live server binding or credentials. Users can follow the built-in MCP setup above with their own address; that still does not connect the custom manager.
+OAuth records, signing keys, and session keys persist in `/data/oauth/oauth.sqlite`, with owner-only permissions. Protect Home Assistant backups: they contain this authentication state and your add-on options. Ordinary restarts preserve connections. Changing the connection password, public URL, manual callback, or write permission and restarting revokes existing grants and browser sessions. To revoke all access, change the connection password and restart; turn off legacy API-key access if enabled.
 
-The planned one-plugin setup is: install add-on → authorize/pair your home → use the management tools. It requires the [gateway implementation](gateway/README.md), per-user OAuth and installation isolation. Those components are not implemented or deployed, so the project is not yet a one-click public service.
+This is a **single-household owner connection**. Anyone with its connection password can approve access to that home, subject to `write_access`; it is not Home Assistant user-level RBAC or a multi-tenant hosted service. Each household installs its own add-on and uses its own URL/password. The [future gateway](gateway/README.md) would remove the need for each household to configure a tunnel.
 
-## Tools and security
+Home Assistant’s `SUPERVISOR_TOKEN` stays inside the add-on. There are no delete tools, arbitrary shell tools, or generic file-access tools. Dashboard saves replace the whole storage-mode configuration; always inspect and preserve it before editing.
 
-The custom bridge can inspect areas/devices/entities, read/create/update automations and scripts, manage storage-mode Lovelace dashboards, and run Home Assistant configuration validation. It has no delete tools, arbitrary shell access, or generic file access. Dashboard saves replace the complete dashboard configuration; read and preserve it before updating.
+## Developers
 
-Home Assistant credentials stay in the add-on. It uses Supervisor’s injected `SUPERVISOR_TOKEN` internally; the separate `api_key` protects incoming MCP requests. `write_access` gates configuration changes.
+See [add-on configuration](home-assistant-chatgpt-manager/DOCS.md), [plugin packaging](plugin/README.md), and [authentication implementation](docs/authentication.md).
 
-## References
-
-- [Home Assistant MCP Server setup and OAuth](https://www.home-assistant.io/integrations/mcp_server/)
-- [OpenAI plugin authentication requirements](https://developers.openai.com/plugins/build/auth)
-- [Connect a custom MCP server to ChatGPT](https://developers.openai.com/api/docs/guides/custom-mcp-server)
-- [Add-on configuration and development](home-assistant-chatgpt-manager/DOCS.md)
-
-Instructions reviewed against the official documentation on 2026-10-08. The current live connection has not been verified through a completed user OAuth login.
+The automated suite exercises browser authorization through real HTTP requests, static and simulated ChatGPT CIMD/signed-client flows, MCP initialization, persistence, PKCE, replay, revocation, expiry, scope checks, CSRF, rate limits, redirect rejection, and write-access gating. It does not substitute for a live ChatGPT/Home Assistant deployment test.
