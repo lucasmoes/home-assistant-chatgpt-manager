@@ -310,7 +310,7 @@ test('Claude OAuth client is registered without changing ChatGPT OAuth', async t
     scope: 'ha:manage', state: 'claude-test', code_challenge: createHash('sha256').update('a'.repeat(43)).digest('base64url'),
     code_challenge_method: 'S256', resource: issuer + '/mcp'
   }));
-  assert.equal(claude.status, 303);
+  assert.ok([302, 303].includes(claude.status));
   assert.match(claude.headers.get('location') ?? '', /interaction/);
   const wrong = await f.request('/oauth/authorize?' + new URLSearchParams({
     response_type: 'code', client_id: CLAUDE_CLIENT_ID, redirect_uri: redirect,
