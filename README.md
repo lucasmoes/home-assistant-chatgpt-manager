@@ -1,5 +1,7 @@
 # Home Assistant ChatGPT Manager
 
+**Claude (experimental):** See [Claude remote MCP setup](docs/claude.md). This is available on the `feature/claude-mcp-connector` branch until merged and deployed. Claude OAuth compatibility has not yet been verified against a live Claude account.
+
 Connect **ChatGPT web** to a Home Assistant add-on that can inspect entities and manage automations, scripts, and dashboards. Your laptop does not run the connection. No desktop ChatGPT app, local MCP proxy, or terminal is required for normal setup.
 
 **Version 0.2.0 adds browser-based OAuth authentication.** Install/update the add-on, give it a public HTTPS address, and sign in from ChatGPT. Each person connects to their own Home Assistant installation.
