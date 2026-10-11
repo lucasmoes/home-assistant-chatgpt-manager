@@ -41,6 +41,15 @@ export interface RegistryArea {
   [key: string]: unknown;
 }
 
+export class HomeAssistantError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | number,
+  ) {
+    super(message);
+  }
+}
+
 type JsonObject = Record<string, unknown>;
 
 export class HomeAssistantClient {
@@ -50,12 +59,10 @@ export class HomeAssistantClient {
     private readonly token: string,
   ) {}
 
-  private async request<T>(
-    path: string,
-    init: RequestInit = {},
-  ): Promise<T> {
+  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
+      signal: AbortSignal.timeout(15000),
       headers: {
         Authorization: `Bearer ${this.token}`,
         "Content-Type": "application/json",
@@ -66,8 +73,9 @@ export class HomeAssistantClient {
     const text = await response.text();
 
     if (!response.ok) {
-      throw new Error(
-        `Home Assistant ${init.method ?? "GET"} ${path} failed (${response.status}): ${text}`,
+      throw new HomeAssistantError(
+        `Home Assistant request failed (${response.status}).`,
+        response.status,
       );
     }
 
@@ -188,7 +196,7 @@ export class HomeAssistantClient {
     });
   }
 
-  private websocketCommand<T>(command: JsonObject): Promise<T> {
+  websocketCommand<T>(command: JsonObject): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const socket = new WebSocket(this.webSocketUrl);
       const id = 1;
@@ -208,7 +216,12 @@ export class HomeAssistantClient {
         finish(new Error("Home Assistant WebSocket request timed out."));
       }, 15_000);
 
-      socket.on("error", (error) => finish(error));
+      socket.on("error", () =>
+        finish(new Error("Home Assistant WebSocket connection failed.")),
+      );
+      socket.on("close", () =>
+        finish(new Error("Home Assistant WebSocket closed before a response.")),
+      );
 
       socket.on("message", (raw) => {
         try {
@@ -245,10 +258,11 @@ export class HomeAssistantClient {
               finish(undefined, message.result as T);
             } else {
               finish(
-                new Error(
-                  `Home Assistant WebSocket command failed: ${JSON.stringify(
-                    message.error ?? message,
-                  )}`,
+                new HomeAssistantError(
+                  `Home Assistant command failed: ${String((message.error as JsonObject)?.code ?? "unknown_error")}`,
+                  String(
+                    (message.error as JsonObject)?.code ?? "unknown_error",
+                  ),
                 ),
               );
             }

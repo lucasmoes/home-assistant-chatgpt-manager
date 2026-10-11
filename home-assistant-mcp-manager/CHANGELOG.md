@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Expand from 18 to 62 tools for setup, diagnostics, references, previews and recovery.
+- Route every existing and new write through persistent proposals and separate owner browser approval.
+- Check stale originals, serialize applies, record client identity and snapshots, and prevent automatic retries after uncertain writes.
+- Require a separate approval_password for writes; existing write tools now return proposals.
+- Preserve existing ChatGPT, Claude and generic MCP OAuth compatibility.
+- Add mocked Home Assistant, approval and recovery tests. Live HA acceptance remains pending.
+
 ## 0.3.0
 
 - Present the server/add-on as Home Assistant MCP Manager while retaining the installed slug, directory, plugin identity, repository URL and existing OAuth client IDs.

@@ -119,12 +119,14 @@ export class OAuthServer {
     return ++counter.count > limit;
   }
 
-  async accepts(token: string): Promise<boolean> {
+  async identity(token: string): Promise<string | undefined> {
     const access = await this.provider.AccessToken.find(token);
-    if (!access?.isValid || access.accountId !== "owner" || access.aud !== this.resource || !access.scopes.has(OAUTH_SCOPE)) return false;
+    if (!access?.isValid || access.accountId !== "owner" || access.aud !== this.resource || !access.scopes.has(OAUTH_SCOPE)) return undefined;
     const grant = await this.provider.Grant.find(access.grantId);
-    return !!grant?.isValid && grant.accountId === "owner" && grant.clientId === access.clientId;
+    return grant?.isValid && grant.accountId === "owner" && grant.clientId === access.clientId ? access.clientId : undefined;
   }
+
+  async accepts(token: string): Promise<boolean> { return !!(await this.identity(token)); }
 
   challenge(res: ServerResponse): void {
     res.setHeader("WWW-Authenticate", `Bearer resource_metadata="${this.config.publicUrl}/.well-known/oauth-protected-resource", scope="${OAUTH_SCOPE}"`);

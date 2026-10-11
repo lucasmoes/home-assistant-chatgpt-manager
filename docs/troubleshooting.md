@@ -12,7 +12,10 @@
 | Authentication succeeds but tools do not load | The MCP URL must end in `/mcp`. Refresh tools or recreate a wrongly addressed connection. |
 | MCP returns 401 after configuration changes | Reconnect OAuth; password and authorization-policy changes invalidate grants. |
 | Health works but Home Assistant reads fail | Check Supervisor/Core API access in the add-on logs. Health is a liveness check only. |
-| Writes are disabled | Set `write_access: true`, save/restart and reconnect to approve the changed access. |
+| Writes are disabled | Configure a separate `approval_password`, set `write_access: true`, save/restart and reconnect. Follow the browser review link before applying. |
+| A create/update tool returns a proposal | Expected since 0.4.0. The owner approves the exact change at `/manage`; the proposing client then calls `apply_approved_change`. |
+| Change is stale or expired | Read the latest configuration and create a fresh proposal for owner review. |
+| Apply is uncertain or unverified | Inspect the actual Home Assistant target. Do not assume failure means no write. Use a saved version to propose restoration if appropriate. |
 | Your AI app has no custom MCP option | Check account/workspace support. Server configuration cannot add a missing client feature. |
 
 The logs report fixed categories without credentials or home data:

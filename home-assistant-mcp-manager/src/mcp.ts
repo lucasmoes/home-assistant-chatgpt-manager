@@ -1,3 +1,5 @@
+import { registerSetupTools } from "./setup-tools.js";
+import type { ChangeManager } from "./changes.js";
 import { randomUUID } from "node:crypto";
 
 import { McpServer } from "@modelcontextprotocol/server";
@@ -101,10 +103,11 @@ function areaForEntity(
 export function buildMcpServer(
   client: HomeAssistantClient,
   writeAccess: boolean,
+  changes: ChangeManager,
 ): McpServer {
   const server = new McpServer({
     name: "home-assistant-mcp-manager",
-    version: "0.3.0",
+    version: "0.4.0",
   });
 
   server.registerTool(
@@ -191,7 +194,9 @@ export function buildMcpServer(
           client.listDevices(),
           client.listAreas(),
         ]);
-        const areaNames = new Map(areas.map((area) => [area.area_id, area.name]));
+        const areaNames = new Map(
+          areas.map((area) => [area.area_id, area.name]),
+        );
         const needle = search?.toLowerCase();
 
         return result(
@@ -216,7 +221,7 @@ export function buildMcpServer(
               model: device.model,
               area_id: device.area_id ?? null,
               area_name: device.area_id
-                ? areaNames.get(device.area_id) ?? null
+                ? (areaNames.get(device.area_id) ?? null)
                 : null,
               disabled_by: device.disabled_by ?? null,
             })),
@@ -252,8 +257,12 @@ export function buildMcpServer(
         const registryByEntity = new Map(
           registry.map((entry) => [entry.entity_id, entry]),
         );
-        const devicesById = new Map(devices.map((device) => [device.id, device]));
-        const areaNames = new Map(areas.map((area) => [area.area_id, area.name]));
+        const devicesById = new Map(
+          devices.map((device) => [device.id, device]),
+        );
+        const areaNames = new Map(
+          areas.map((area) => [area.area_id, area.name]),
+        );
         const needle = search?.toLowerCase();
 
         const matches = states
@@ -293,7 +302,7 @@ export function buildMcpServer(
               domain: state.entity_id.split(".", 1)[0],
               area_id: resolvedArea,
               area_name: resolvedArea
-                ? areaNames.get(resolvedArea) ?? null
+                ? (areaNames.get(resolvedArea) ?? null)
                 : null,
               device_id: registryEntity?.device_id ?? null,
               disabled_by: registryEntity?.disabled_by ?? null,
@@ -336,8 +345,7 @@ export function buildMcpServer(
         const device = registryEntity?.device_id
           ? devices.find((entry) => entry.id === registryEntity.device_id)
           : undefined;
-        const resolvedArea =
-          registryEntity?.area_id ?? device?.area_id ?? null;
+        const resolvedArea = registryEntity?.area_id ?? device?.area_id ?? null;
         const area = resolvedArea
           ? areas.find((entry) => entry.area_id === resolvedArea)
           : undefined;
@@ -423,7 +431,7 @@ export function buildMcpServer(
     "create_automation",
     {
       description:
-        "Create a UI-managed Home Assistant automation. Inspect entities and existing automations first. Home Assistant validates the submitted configuration.",
+        "Prepare an owner-review proposal (no immediate write). Create a UI-managed Home Assistant automation. Inspect entities and existing automations first. Home Assistant validates the submitted configuration.",
       inputSchema: z.object({
         id: z.string().min(1).optional(),
         config: automationConfigSchema,
@@ -433,11 +441,14 @@ export function buildMcpServer(
       try {
         requireWriteAccess(writeAccess);
         const newId = id ?? randomUUID();
-        await client.saveAutomation(newId, config as JsonObject);
-        return result({
-          id: newId,
-          config: await client.getAutomation(newId),
-        });
+        return result(
+          await changes.propose({
+            kind: "automation",
+            action: "create",
+            id: newId,
+            data: config,
+          }),
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -448,7 +459,7 @@ export function buildMcpServer(
     "update_automation",
     {
       description:
-        "Replace one UI-managed automation configuration. Read the existing automation first and preserve unrelated fields.",
+        "Prepare an owner-review proposal (no immediate write). Replace one UI-managed automation configuration. Read the existing automation first and preserve unrelated fields.",
       inputSchema: z.object({
         id: z.string().min(1),
         config: automationConfigSchema,
@@ -458,11 +469,14 @@ export function buildMcpServer(
       try {
         requireWriteAccess(writeAccess);
         const resolvedId = await resolveAutomationId(client, id);
-        await client.saveAutomation(resolvedId, config as JsonObject);
-        return result({
-          id: resolvedId,
-          config: await client.getAutomation(resolvedId),
-        });
+        return result(
+          await changes.propose({
+            kind: "automation",
+            action: "update",
+            id: resolvedId,
+            data: config,
+          }),
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -538,23 +552,28 @@ export function buildMcpServer(
     "create_script",
     {
       description:
-        "Create a UI-managed Home Assistant script. Inspect existing scripts and target entities first.",
+        "Prepare an owner-review proposal (no immediate write). Create a UI-managed Home Assistant script. Inspect existing scripts and target entities first.",
       inputSchema: z.object({
         object_id: z
           .string()
           .regex(/^[a-z0-9_]+$/)
-          .describe("Home Assistant script object id, without the script. prefix."),
+          .describe(
+            "Home Assistant script object id, without the script. prefix.",
+          ),
         config: scriptConfigSchema,
       }),
     },
     async ({ object_id, config }) => {
       try {
         requireWriteAccess(writeAccess);
-        await client.saveScript(object_id, config as JsonObject);
-        return result({
-          id: object_id,
-          config: await client.getScript(object_id),
-        });
+        return result(
+          await changes.propose({
+            kind: "script",
+            action: "create",
+            id: object_id,
+            data: config,
+          }),
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -565,7 +584,7 @@ export function buildMcpServer(
     "update_script",
     {
       description:
-        "Replace one UI-managed Home Assistant script configuration. Read the existing script first and preserve unrelated fields.",
+        "Prepare an owner-review proposal (no immediate write). Replace one UI-managed Home Assistant script configuration. Read the existing script first and preserve unrelated fields.",
       inputSchema: z.object({
         id: z.string().min(1),
         config: scriptConfigSchema,
@@ -575,11 +594,14 @@ export function buildMcpServer(
       try {
         requireWriteAccess(writeAccess);
         const objectId = scriptObjectId(id);
-        await client.saveScript(objectId, config as JsonObject);
-        return result({
-          id: objectId,
-          config: await client.getScript(objectId),
-        });
+        return result(
+          await changes.propose({
+            kind: "script",
+            action: "update",
+            id: objectId,
+            data: config,
+          }),
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -606,7 +628,7 @@ export function buildMcpServer(
     "create_dashboard",
     {
       description:
-        "Create a new storage-mode Home Assistant Lovelace dashboard and optionally write its initial configuration.",
+        "Prepare an owner-review proposal (no immediate write). Create a new storage-mode Home Assistant Lovelace dashboard and optionally write its initial configuration.",
       inputSchema: z.object({
         url_path: z
           .string()
@@ -629,22 +651,20 @@ export function buildMcpServer(
     }) => {
       try {
         requireWriteAccess(writeAccess);
-        await client.createDashboard({
-          url_path,
-          title,
-          ...(icon ? { icon } : {}),
-          show_in_sidebar,
-          require_admin,
-        });
-
-        if (config) {
-          await client.saveDashboard(config, url_path);
-        }
-
-        return result({
-          url_path,
-          dashboard: await client.getDashboard(url_path),
-        });
+        return result(
+          await changes.propose({
+            kind: "dashboard_create",
+            action: "create",
+            data: {
+              url_path,
+              title,
+              ...(icon ? { icon } : {}),
+              show_in_sidebar,
+              require_admin,
+              ...(config ? { config } : {}),
+            },
+          }),
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -676,7 +696,7 @@ export function buildMcpServer(
     "save_dashboard",
     {
       description:
-        "Replace the complete configuration of a storage-mode Lovelace dashboard. Always read the dashboard first and preserve views/cards that should remain.",
+        "Prepare an owner-review proposal (no immediate write). Replace the complete configuration of a storage-mode Lovelace dashboard. Always read the dashboard first and preserve views/cards that should remain.",
       inputSchema: z.object({
         url_path: z.string().optional(),
         config: z.record(z.string(), z.unknown()),
@@ -685,11 +705,14 @@ export function buildMcpServer(
     async ({ url_path, config }) => {
       try {
         requireWriteAccess(writeAccess);
-        await client.saveDashboard(config, url_path);
-        return result({
-          url_path: url_path ?? null,
-          config: await client.getDashboard(url_path),
-        });
+        return result(
+          await changes.propose({
+            kind: "dashboard",
+            action: "update",
+            id: url_path,
+            data: config,
+          }),
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -712,5 +735,6 @@ export function buildMcpServer(
     },
   );
 
+  registerSetupTools(server, changes);
   return server;
 }

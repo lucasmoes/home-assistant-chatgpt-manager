@@ -10,6 +10,7 @@ export interface BridgeConfig {
   oauthDynamicRegistration?: boolean;
   allowLegacyApiKey: boolean;
   apiKey: string;
+  approvalPassword?: string;
   writeAccess: boolean;
   logLevel: string;
   homeAssistantBaseUrl: string;
@@ -32,8 +33,17 @@ function asBoolean(value: string | undefined, fallback: boolean): boolean {
 export function validatePublicUrl(value: string): string {
   if (!value) return "";
   const url = new URL(value);
-  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || url.pathname !== "/") {
-    throw new Error("PUBLIC_URL must be a public HTTPS origin without a path, query or credentials");
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== "/"
+  ) {
+    throw new Error(
+      "PUBLIC_URL must be a public HTTPS origin without a path, query or credentials",
+    );
   }
   return url.origin;
 }
@@ -43,15 +53,35 @@ export function loadConfig(): BridgeConfig {
 
   const publicUrl = validatePublicUrl(process.env.PUBLIC_URL ?? "");
   const apiKey = required("BRIDGE_API_KEY", process.env.BRIDGE_API_KEY);
-  if (publicUrl && apiKey.length < 32) throw new Error("OAuth requires an api_key of at least 32 characters");
-  const oauthRedirectUri = process.env.OAUTH_REDIRECT_URI || "https://chatgpt.com/connector_platform_oauth_redirect";
+  if (publicUrl && apiKey.length < 32)
+    throw new Error("OAuth requires an api_key of at least 32 characters");
+  const oauthRedirectUri =
+    process.env.OAUTH_REDIRECT_URI ||
+    "https://chatgpt.com/connector_platform_oauth_redirect";
   // Legacy setting remains a ChatGPT-only compatibility preset.
-  if (!chatGptRedirect(oauthRedirectUri)) throw new Error("OAUTH_REDIRECT_URI must be the exact ChatGPT OAuth callback URL");
+  if (!chatGptRedirect(oauthRedirectUri))
+    throw new Error(
+      "OAUTH_REDIRECT_URI must be the exact ChatGPT OAuth callback URL",
+    );
+  const approvalPassword = process.env.APPROVAL_PASSWORD || undefined;
+  if (
+    approvalPassword &&
+    (approvalPassword.length < 32 ||
+      approvalPassword === apiKey ||
+      approvalPassword === token)
+  )
+    throw new Error(
+      "APPROVAL_PASSWORD must be at least 32 characters and different from client/API credentials",
+    );
   return {
+    approvalPassword,
     publicUrl,
     oauthRedirectUri,
     oauthClients: parseClients(process.env.OAUTH_CLIENTS ?? "[]"),
-    oauthDynamicRegistration: asBoolean(process.env.OAUTH_DYNAMIC_REGISTRATION, false),
+    oauthDynamicRegistration: asBoolean(
+      process.env.OAUTH_DYNAMIC_REGISTRATION,
+      false,
+    ),
     oauthDataDir: process.env.OAUTH_DATA_DIR ?? "/data/oauth",
     allowLegacyApiKey: asBoolean(process.env.ALLOW_LEGACY_API_KEY, false),
     port: Number(process.env.PORT ?? "8765"),

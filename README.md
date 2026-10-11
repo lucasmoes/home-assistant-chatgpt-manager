@@ -6,9 +6,10 @@ Runs as a self-hosted Home Assistant add-on. OAuth protects access, and configur
 
 ## What it can do
 
-- Inspect entities, devices, areas and configuration.
-- Read, create and update automations and scripts.
-- Read, create and update storage-mode Lovelace dashboards.
+- Inspect entities, history, automation traces and error logs.
+- Set up automations, scripts, helpers, scenes, areas, floors, labels and zones.
+- Build dashboards and edit individual views or cards.
+- Preview changes, approve them in your browser, and restore saved configuration versions.
 - Connect multiple AI clients to the same installation.
 
 ## Supported clients
@@ -54,7 +55,9 @@ See the [full setup guide](docs/setup.md) for routing, upgrades and enabling wri
 
 Each household hosts its own server. Home Assistant credentials stay inside the add-on; connected AI clients can receive home data through the tools you authorize. Anyone with the connection password can approve access, subject to the shared `write_access` setting.
 
-To enable edits, set `write_access: true`, restart and reconnect. Password or authorization-policy changes revoke existing connections. Never put passwords or tokens in chat or plugin files.
+To enable edits, configure a separate random `approval_password` (at least 32 characters), set `write_access: true`, restart and reconnect. Every write returns a preview and browser review link. Approve the exact change there, then ask the AI to apply it. Password or authorization-policy changes revoke existing connections. Never put passwords or tokens in chat or plugin files.
+
+See the [62-tool guide](docs/tools.md) for supported operations and limitations.
 
 ## Development
 
