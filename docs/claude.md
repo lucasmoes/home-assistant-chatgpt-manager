@@ -1,6 +1,6 @@
 # Claude setup
 
-Install the 0.3.0 code and follow the [shared add-on setup](../README.md#set-up-in-the-browser). Until merged/released, build from PR #1's branch. Repository changes alone do not update the running add-on.
+Install add-on version 0.3.0 or later and follow the [shared setup guide](setup.md). Update and restart the running add-on before connecting.
 
 1. Enable `oauth_dynamic_registration: true` in the add-on, save and restart. This changes the authorization policy and requires existing connections to reconnect.
 2. In Claude's **Customize → Connectors**, add a custom connector (organization owners use organization settings).

@@ -2,7 +2,7 @@ name: Home Assistant MCP Manager
 version: "0.3.0"
 slug: home_assistant_chatgpt_manager
 description: Manage Home Assistant configuration from compatible AI clients through MCP.
-url: https://github.com/lucasmoes/home-assistant-chatgpt-manager
+url: https://github.com/lucasmoes/home-assistant-mcp-manager
 arch:
   - amd64
   - aarch64
