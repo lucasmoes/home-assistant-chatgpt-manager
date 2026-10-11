@@ -6,6 +6,8 @@ import { OAuthStore } from "./oauth-store.js";
 
 export const OAUTH_SCOPE = "ha:manage";
 export const CLIENT_ID = "home-assistant-manager";
+export const CLAUDE_CLIENT_ID = "home-assistant-manager-claude";
+export const CLAUDE_REDIRECT_URI = "https://claude.ai/api/mcp/auth_callback";
 
 export function secretEqual(a: string, b: string): boolean {
   return timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
@@ -58,6 +60,13 @@ export class OAuthServer {
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
         token_endpoint_auth_method: "none",
+      }, {
+        client_id: CLAUDE_CLIENT_ID,
+        client_name: "Claude",
+        redirect_uris: [CLAUDE_REDIRECT_URI],
+        grant_types: ["authorization_code", "refresh_token"],
+        response_types: ["code"],
+        token_endpoint_auth_method: "none",
       }],
       features: {
         devInteractions: { enabled: false },
@@ -91,7 +100,7 @@ export class OAuthServer {
       findAccount: (_ctx, id) => id === "owner" ? { accountId: id, claims: () => ({ sub: id }) } : undefined,
       renderError: async (ctx, output) => {
         ctx.type = "html";
-        ctx.body = this.page("Connection failed", `<p>${escape(output.error)}: ${escape(output.error_description)}</p><p>Return to ChatGPT and start the connection again.</p>`);
+        ctx.body = this.page("Connection failed", `<p>${escape(output.error)}: ${escape(output.error_description)}</p><p>Return to your AI assistant and start the connection again.</p>`);
       },
     });
     this.provider.proxy = true;
@@ -141,7 +150,7 @@ export class OAuthServer {
     res.setHeader("referrer-policy", path.startsWith("/interaction/") ? "same-origin" : "no-referrer");
     res.setHeader("x-content-type-options", "nosniff");
     res.setHeader("x-frame-options", "DENY");
-    res.setHeader("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; frame-ancestors 'none'; base-uri 'none'");
+    res.setHeader("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com https://claude.ai; frame-ancestors 'none'; base-uri 'none'");
     // This service is behind an HTTPS tunnel. Canonical origin comes exclusively
     // from configuration, never from untrusted Host/X-Forwarded-* headers.
     const canonical = new URL(this.config.publicUrl);
@@ -172,7 +181,7 @@ export class OAuthServer {
         if (prompt.name === "login") {
           body = `<p>Enter the connection password from this add-on’s <strong>api_key</strong> setting. This is separate from your Home Assistant account password.</p><form method="post">${hidden}<label>Connection password<input name="password" type="password" autocomplete="current-password" required maxlength="1024"></label><button name="action" value="login">Sign in</button></form>`;
         } else if (prompt.name === "consent") {
-          body = `<p>Allow ChatGPT to access this Home Assistant installation?</p><p>${this.config.writeAccess ? "Read entities and configuration, and create or update automations, scripts and dashboards." : "Read entities and configuration. Configuration changes are disabled in the add-on."}</p><small>Server: ${escape(this.config.publicUrl)}<br>Client: ${escape(params.client_id)}</small><form method="post">${hidden}<button name="action" value="allow">Allow connection</button><button class="secondary" name="action" value="deny">Cancel</button></form>`;
+          body = `<p>Allow ${escape(params.client_id === CLAUDE_CLIENT_ID ? "Claude" : "ChatGPT")} to access this Home Assistant installation?</p><p>${this.config.writeAccess ? "Read entities and configuration, and create or update automations, scripts and dashboards." : "Read entities and configuration. Configuration changes are disabled in the add-on."}</p><small>Server: ${escape(this.config.publicUrl)}<br>Client: ${escape(params.client_id)}</small><form method="post">${hidden}<button name="action" value="allow">Allow connection</button><button class="secondary" name="action" value="deny">Cancel</button></form>`;
         } else { json(res, 400, { error: "unsupported_interaction" }); return; }
         res.setHeader("content-type", "text/html; charset=utf-8");
         res.end(this.page(prompt.name === "login" ? "Connect your home" : "Approve connection", body));
