@@ -1,6 +1,6 @@
 # ChatGPT setup
 
-Use the [shared add-on installation](../README.md#set-up-in-the-browser), then connect the remote MCP URL `https://YOUR-MANAGER-HOST/mcp` in ChatGPT's custom MCP settings.
+Use the [shared add-on installation](setup.md), then connect the remote MCP URL `https://YOUR-MANAGER-HOST/mcp` in ChatGPT's custom MCP settings.
 
 Choose OAuth and automatic **CIMD** for the existing ChatGPT integration. Its allowlisted metadata and signed client authentication remain supported. DCR can stay disabled. For manual public-client setup use `home-assistant-manager`, no client secret, scope `ha:manage`, and copy ChatGPT's exact callback to `oauth_redirect_uri`. That legacy option remains ChatGPT-specific; other clients belong in `oauth_clients`.
 

@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: home-assistant-chatgpt-manager
+        working-directory: home-assistant-mcp-manager
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -1,6 +1,6 @@
 # Connect any compatible MCP client
 
-Install the add-on, set its connection password and dedicated HTTPS `public_url`, and route the entire origin to port 8765. See [installation](../README.md#set-up-in-the-browser). All clients use `https://YOUR-MANAGER-HOST/mcp` with Streamable HTTP. Server-to-server/native clients must support OAuth authorization code with S256 PKCE and browser consent. Browser JavaScript clients on other origins are not enabled by CORS.
+Install the add-on, set its connection password and dedicated HTTPS `public_url`, and route the entire origin to port 8765. See [installation](setup.md). All clients use `https://YOUR-MANAGER-HOST/mcp` with Streamable HTTP. Server-to-server/native clients must support OAuth authorization code with S256 PKCE and browser consent. Browser JavaScript clients on other origins are not enabled by CORS.
 
 ## Registration choices
 
