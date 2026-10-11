@@ -1,37 +1,18 @@
-# Connect Claude to Home Assistant Manager
+# Claude setup
 
-Claude web and desktop support custom remote MCP connectors. This project offers a dedicated **public OAuth client** for Claude alongside the existing ChatGPT client; the Home Assistant tools and authentication password are shared.
+Install the 0.3.0 code and follow the [shared add-on setup](../README.md#set-up-in-the-browser). Until merged/released, build from PR #1's branch. Repository changes alone do not update the running add-on.
 
-## Requirements
+1. Enable `oauth_dynamic_registration: true` in the add-on, save and restart. This changes the authorization policy and requires existing connections to reconnect.
+2. In Claude's **Customize → Connectors**, add a custom connector (organization owners use organization settings).
+3. Use the name **Home Assistant MCP Manager** and URL `https://YOUR-MANAGER-HOST/mcp`.
+4. Choose OAuth/sign-in and **Register automatically**. Do not choose Claude's published identity: this release's CIMD allowlist covers ChatGPT only. DCR registers a separate client without hardcoded provider IDs.
+5. Sign in on the manager's own HTTPS page with the add-on connection password, inspect the client/callback shown, and approve.
+6. Enable the connector in a conversation and request a read-only `get_home_overview` check.
 
-- Home Assistant ChatGPT Manager add-on built from this Claude-support branch (until released).
-- Your existing dedicated HTTPS hostname pointing to the add-on port **8765**, not Home Assistant Core.
-- Add-on setting `public_url: https://ha-manager.YOUR-DOMAIN` (origin only) and a strong `api_key`. Keep `allow_legacy_api_key: false`.
-- Claude account with custom connector support. If you plan to edit automations, enable `write_access: true` in the add-on before connecting.
+For manual public-client setup, DCR can stay disabled. Choose your own OAuth client, ID `home-assistant-manager-claude`, no secret, callback `https://claude.ai/api/mcp/auth_callback`, scope `ha:manage`. The authorization and token endpoints are `/oauth/authorize` and `/oauth/token` on your public origin. Leave the legacy `oauth_redirect_uri` option alone; it belongs to ChatGPT. If the UI requires a secret, use automatic registration; the DCR endpoint supports generated `client_secret_basic` and `client_secret_post` credentials as well as public clients. Never use the connection password as a client secret.
 
-## Claude setup
+All clients require PKCE and owner approval. If a callback changes, register it via DCR or a new configured public client rather than loosening the existing preset. For `invalid_client`, check the chosen registration mode and discovery. The remote endpoint must be reachable by Claude's servers.
 
-1. Update/rebuild the add-on with this change, then restart. The server will **not** use new code until it is deployed.
-2. In Claude web or desktop open **Settings → Connectors → Add custom connector** (the menu may differ by plan).
-3. Set the server name to `Home Assistant Manager` and the remote MCP URL to `https://ha-manager.YOUR-DOMAIN/mcp`.
-4. Under **Advanced OAuth settings**, if Claude requests manual client details, enter:
-   - **Client ID:** `home-assistant-manager-claude`
-   - **Client secret:** leave blank (public OAuth client / PKCE); **never** paste your add-on `api_key` here.
-   - **Authorization URL:** `https://ha-manager.YOUR-DOMAIN/oauth/authorize`
-   - **Token URL:** `https://ha-manager.YOUR-DOMAIN/oauth/token`
-   - **Scope (if requested):** `ha:manage`
-   - **Redirect/callback URL (server-registered):** `https://claude.ai/api/mcp/auth_callback`
-5. Connect and approve the add-on's password login and consent screen.
-6. In a Claude chat, request: *Use get_home_overview to inspect my Home Assistant. Do not change anything.*
+Automated tests cover the Claude callback through login, consent, token issuance, refresh, revocation and MCP initialization. Live Claude verification remains pending.
 
-If Claude requires an OAuth client secret and will not accept a blank one, **this release cannot complete that connection**. It does not implement Dynamic Client Registration (DCR), and its Claude client is public/PKCE-only. Do not enable legacy API keys to work around that. Claude also has reported callback problems with some third-party OAuth MCP connectors.
-
-## Troubleshooting
-
-- The MCP endpoint is `/mcp`, not `/oauth/authorize` or Home Assistant Core's `/api/mcp`.
-- Open `https://ha-manager.YOUR-DOMAIN/health` and `/.well-known/oauth-authorization-server` to verify routing/discovery.
-- If Claude reports `invalid_client`, check the exact client ID above and whether its advanced OAuth settings actually allow public clients.
-- If consent succeeds but Claude cannot exchange the code, inspect sanitized add-on logs and the Claude connector error; this does not prove the Home Assistant API is broken.
-- ChatGPT remains configured with its existing OAuth client and URL. Do not change `oauth_redirect_uri` to Claude's callback.
-
-**Security:** The connection password belongs only on the add-on's own HTTPS login page. Each assistant receives its own scoped, short-lived OAuth token. An accepted connector with `write_access: true` can modify Home Assistant configuration.
+[Official Claude connector setup](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp). Menus and availability may vary by account.

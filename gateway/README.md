@@ -1,6 +1,6 @@
 # Future shared gateway
 
-The self-hosted add-on now implements OAuth for ChatGPT web. Each household can connect directly using its own public HTTPS hostname and connection password; follow the [setup guide](../README.md).
+The self-hosted add-on now implements OAuth for compatible MCP clients, including ChatGPT and Claude. Each household can connect directly using its own public HTTPS hostname and connection password; follow the [setup guide](../README.md).
 
 A shared LLabs gateway remains unimplemented. Its goal is to let users install one public plugin, pair a Home Assistant add-on, and connect without configuring an inbound tunnel or hostname per home.
 

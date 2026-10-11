@@ -20,6 +20,8 @@ fi
 export PUBLIC_URL="$(jq -r '.public_url // ""' "$OPTIONS_FILE")"
 export OAUTH_REDIRECT_URI="$(jq -r '.oauth_redirect_uri // "https://chatgpt.com/connector_platform_oauth_redirect"' "$OPTIONS_FILE")"
 export ALLOW_LEGACY_API_KEY="$(jq -r '.allow_legacy_api_key // false' "$OPTIONS_FILE")"
+export OAUTH_CLIENTS="$(jq -c '.oauth_clients // []' "$OPTIONS_FILE")"
+export OAUTH_DYNAMIC_REGISTRATION="$(jq -r '.oauth_dynamic_registration // false' "$OPTIONS_FILE")"
 export OAUTH_DATA_DIR="/data/oauth"
 export BRIDGE_API_KEY="$API_KEY"
 export WRITE_ACCESS="$WRITE_ACCESS_VALUE"

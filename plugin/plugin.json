@@ -1,15 +1,15 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "home-assistant-manager",
-  "version": "0.2.2",
-  "description": "Inspect and manage Home Assistant configuration through ChatGPT.",
+  "version": "0.3.0",
+  "description": "Inspect and manage Home Assistant configuration through compatible MCP clients.",
   "author": {
     "name": "LLabs"
   },
   "extensions": {
     "com.openai": {
       "interface": {
-        "displayName": "Home Assistant Manager",
+        "displayName": "Home Assistant MCP Manager",
         "shortDescription": "Manage Home Assistant",
         "longDescription": "Inspect real Home Assistant entities, automations, scripts and dashboards, then safely create or update configuration.",
         "developerName": "LLabs",

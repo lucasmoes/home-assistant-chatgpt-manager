@@ -7,17 +7,19 @@ import { createHash, randomBytes, generateKeyPairSync, sign } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite';
 import { once } from 'node:events';
 import { createBridge } from '../dist/app.js';
-import { validatePublicUrl } from '../dist/config.js';
+import { loadConfig, validatePublicUrl } from '../dist/config.js';
 import { chatGptRedirect, CLAUDE_CLIENT_ID, CLAUDE_REDIRECT_URI } from '../dist/oauth.js';
+
+import { parseClients, validRedirect } from '../dist/oauth-clients.js';
 
 const issuer = 'https://manager.example.com';
 const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
 const password = 'test-password-only-32-characters-minimum';
 const init = { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'auth-test', version: '1' } } };
 
-async function fixture(t, clientId = 'home-assistant-manager') {
+async function fixture(t, clientId = 'home-assistant-manager', callback = redirect, overrides = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'ha-oauth-'));
-  const config = { port: 0, publicUrl: issuer, oauthRedirectUri: redirect, oauthDataDir: dir, allowLegacyApiKey: false, apiKey: password, writeAccess: false, logLevel: 'error', homeAssistantBaseUrl: 'http://127.0.0.1:1/api', homeAssistantWebSocketUrl: 'ws://127.0.0.1:1/websocket', homeAssistantToken: 'test-only' };
+  const config = { port: 0, publicUrl: issuer, oauthRedirectUri: redirect, oauthDataDir: dir, allowLegacyApiKey: false, apiKey: password, writeAccess: false, logLevel: 'error', homeAssistantBaseUrl: 'http://127.0.0.1:1/api', homeAssistantWebSocketUrl: 'ws://127.0.0.1:1/websocket', homeAssistantToken: 'test-only', ...overrides };
   let bridge, local;
   async function start() {
     bridge = createBridge(config); bridge.server.listen(0, '127.0.0.1'); await once(bridge.server, 'listening');
@@ -41,16 +43,16 @@ async function fixture(t, clientId = 'home-assistant-manager') {
   const post = (path, data, extra = {}) => request(path, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...(path.startsWith('/interaction/') ? { Origin: issuer } : {}), ...extra }, body: new URLSearchParams(data) });
   const authParams = () => {
     const verifier = randomBytes(32).toString('base64url');
-    const params = new URLSearchParams({ client_id: clientId, redirect_uri: redirect, response_type: 'code', scope: 'ha:manage', resource: issuer + '/mcp', state: 'state-123', code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' });
+    const params = new URLSearchParams({ client_id: clientId, redirect_uri: callback, response_type: 'code', scope: 'ha:manage', resource: issuer + '/mcp', state: 'state-123', code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' });
     return { verifier, params };
   };
-  async function authorize({ deny = false } = {}) {
+  async function authorize({ deny = false, inspectConsent } = {}) {
     cookies.clear();
     const { verifier, params } = authParams();
     let response = await request('/oauth/authorize?' + params);
     for (let step = 0; step < 12; step++) {
       const location = response.headers.get('location');
-      if (location?.startsWith('https://chatgpt.com/')) {
+      if (location && new URL(location, issuer).origin === new URL(callback).origin) {
         const url = new URL(location);
         assert.equal(url.searchParams.get('state'), 'state-123');
         assert.equal(url.searchParams.get('iss'), issuer);
@@ -65,15 +67,16 @@ async function fixture(t, clientId = 'home-assistant-manager') {
         const html = await response.text();
         const csrf = html.match(/name="csrf" value="([^"]+)"/)?.[1];
         assert.ok(csrf, html);
+        if (!html.includes('name="password"')) inspectConsent?.(html, response.headers);
         const action = html.includes('name="password"') ? 'login' : deny ? 'deny' : 'allow';
         response = await post(path, { csrf, action, password });
       }
     }
     assert.fail('Authorization did not finish');
   }
-  const exchange = async (code, verifier, extra = {}) => post('/oauth/token', { grant_type: 'authorization_code', client_id: 'home-assistant-manager', redirect_uri: redirect, code, code_verifier: verifier, resource: issuer + '/mcp', ...extra });
+  const exchange = async (code, verifier, extra = {}) => post('/oauth/token', { grant_type: 'authorization_code', client_id: clientId, redirect_uri: callback, code, code_verifier: verifier, resource: issuer + '/mcp', ...extra });
   const mcp = token => request('/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${token}` }, body: JSON.stringify(init) });
-  return { config, dir, request, post, authParams, authorize, exchange, mcp, async restart(change = {}) { await stop(); Object.assign(config, change); cookies.clear(); await start(); } };
+  return { config, dir, selectClient(id, uri) { clientId = id; callback = uri; }, request, post, authParams, authorize, exchange, mcp, async restart(change = {}) { await stop(); Object.assign(config, change); cookies.clear(); await start(); } };
 }
 
 test('OAuth discovery advertises S256, exact issuer/resource, CIMD; MCP rejects passwords and missing tokens', async t => {
@@ -318,4 +321,161 @@ test('Claude OAuth client is registered without changing ChatGPT OAuth', async t
     code_challenge_method: 'S256', resource: issuer + '/mcp'
   }));
   assert.equal(wrong.status, 400);
+});
+
+
+for (const [name, id, callback, config] of [
+  ['Claude', CLAUDE_CLIENT_ID, CLAUDE_REDIRECT_URI, {}],
+  ['Generic client', 'other-ai', 'https://other.example/callback', { oauthClients: parseClients(JSON.stringify([
+    { client_id: 'other-ai', client_name: 'Other <AI>', redirect_uris: ['https://other.example/callback'] },
+  ])) }],
+  ['Loopback client', 'local-ai', 'http://localhost:8766/oauth/callback', { oauthClients: parseClients(JSON.stringify([
+    { client_id: 'local-ai', client_name: 'Local AI', redirect_uris: ['http://localhost:8766/oauth/callback'] },
+  ])) }],
+]) {
+  test(`${name}: complete consent, MCP, persistence, refresh and client isolation`, async t => {
+    const f = await fixture(t, id, callback, config);
+    const auth = await f.authorize({ inspectConsent(html, headers) {
+      assert.ok(html.includes(callback));
+      assert.ok(!html.includes('Allow ChatGPT'));
+      assert.match(html, /names are labels/);
+      assert.ok(headers.get('content-security-policy').includes(new URL(callback).origin));
+      if (id === 'other-ai') { assert.match(html, /Other &lt;AI&gt;/); assert.ok(!html.includes('Other <AI>')); }
+    } });
+    assert.equal((await f.exchange(auth.code, auth.verifier, { client_id: 'home-assistant-manager' })).status, 400);
+    const next = await f.authorize();
+    const response = await f.exchange(next.code, next.verifier);
+    const token = await response.json(); assert.equal(response.status, 200, JSON.stringify(token));
+    assert.equal((await f.mcp(token.access_token)).status, 200);
+    await f.restart();
+    assert.equal((await f.mcp(token.access_token)).status, 200);
+    assert.equal((await f.post('/oauth/token', { grant_type: 'refresh_token', client_id: 'home-assistant-manager', refresh_token: token.refresh_token })).status, 400);
+    const refreshed = await f.post('/oauth/token', { grant_type: 'refresh_token', client_id: id, refresh_token: token.refresh_token, resource: issuer + '/mcp' });
+    assert.equal(refreshed.status, 200);
+    const second = await refreshed.json(); assert.notEqual(second.refresh_token, token.refresh_token);
+    assert.equal((await f.mcp(second.access_token)).status, 200);
+    assert.equal((await f.post('/oauth/revoke', { client_id: id, token: second.access_token })).status, 200);
+    assert.equal((await f.mcp(second.access_token)).status, 401);
+  });
+}
+
+const register = (f, metadata) => f.request('/oauth/register', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadata),
+});
+const registration = { client_name: 'Example AI', redirect_uris: ['https://example.ai/callback'],
+  grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'], token_endpoint_auth_method: 'none' };
+
+test('DCR is opt-in; enabled discovery, public and confidential registration survive restart', async t => {
+  const f = await fixture(t);
+  assert.equal((await (await f.request('/.well-known/oauth-authorization-server')).json()).registration_endpoint, undefined);
+  assert.equal((await register(f, registration)).status, 404);
+  await f.restart({ oauthDynamicRegistration: true });
+  const discovery = await (await f.request('/.well-known/oauth-authorization-server')).json();
+  assert.equal(discovery.registration_endpoint, issuer + '/oauth/register');
+  for (const method of ['none', 'client_secret_basic', 'client_secret_post']) {
+    assert.ok(discovery.token_endpoint_auth_methods_supported.includes(method));
+    const response = await register(f, { ...registration, token_endpoint_auth_method: method });
+    const client = await response.json(); assert.equal(response.status, 201, JSON.stringify(client));
+    assert.ok(client.client_id); assert.equal(client.registration_access_token, undefined);
+    if (method === 'none') assert.equal(client.client_secret, undefined); else assert.ok(client.client_secret);
+    f.selectClient(client.client_id, registration.redirect_uris[0]);
+    await f.restart();
+    const auth = await f.authorize();
+    const body = { grant_type: 'authorization_code', code: auth.code, code_verifier: auth.verifier,
+      redirect_uri: registration.redirect_uris[0], resource: issuer + '/mcp' };
+    let exchanged;
+    if (method === 'client_secret_basic') {
+      exchanged = await f.post('/oauth/token', body, { Authorization: 'Basic ' + Buffer.from(client.client_id + ':' + client.client_secret).toString('base64') });
+    } else {
+      exchanged = await f.post('/oauth/token', { ...body, client_id: client.client_id, ...(client.client_secret ? { client_secret: client.client_secret } : {}) });
+    }
+    const token = await exchanged.json(); assert.equal(exchanged.status, 200, JSON.stringify(token));
+    assert.equal((await f.mcp(token.access_token)).status, 200);
+    const refreshed = await f.post('/oauth/token', { grant_type: 'refresh_token', refresh_token: token.refresh_token,
+      ...(method === 'client_secret_basic' ? {} : { client_id: client.client_id, ...(client.client_secret ? { client_secret: client.client_secret } : {}) }) },
+      method === 'client_secret_basic' ? { Authorization: 'Basic ' + Buffer.from(client.client_id + ':' + client.client_secret).toString('base64') } : {});
+    assert.equal(refreshed.status, 200, await refreshed.text());
+  }
+});
+
+test('DCR rejects dangerous metadata and grants, bounds registration rate and storage', async t => {
+  const f = await fixture(t, undefined, undefined, { oauthDynamicRegistration: true });
+  for (const bad of [
+    { redirect_uris: ['http://evil.example/callback'] }, { redirect_uris: ['https://evil.example/#fragment'] },
+    { redirect_uris: ['https://*.example/callback'] }, { redirect_uris: ['https://user:pass@example.com/'] },
+    { grant_types: ['client_credentials'] }, { response_types: ['token'] },
+    { jwks_uri: 'http://127.0.0.1/keys' }, { sector_identifier_uri: 'http://127.0.0.1/private' },
+    { token_endpoint_auth_method: 'private_key_jwt' }, { scope: 'admin' },
+  ]) {
+    const response = await register(f, { ...registration, ...bad }); assert.equal(response.status, 400, await response.text());
+  }
+  assert.equal((await register(f, registration)).status, 429);
+  await f.restart();
+  const db = new DatabaseSync(join(f.dir, 'oauth.sqlite')); t.after(() => db.close());
+  const insert = db.prepare("INSERT INTO records(model,id,payload) VALUES('Client',?, '{}')");
+  for (let i = 0; i < 100; i++) insert.run('capacity-' + i);
+  assert.equal((await register(f, registration)).status, 429);
+});
+
+test('DCR body size, callback binding, PKCE, denial and policy reset', async t => {
+  const f = await fixture(t, undefined, undefined, { oauthDynamicRegistration: true });
+  assert.equal((await register(f, { ...registration, client_name: 'a'.repeat(60000) })).status, 400);
+  const response = await register(f, { ...registration, redirect_uris: ['http://127.0.0.1:9876/callback'] });
+  const client = await response.json(); assert.equal(response.status, 201, JSON.stringify(client));
+  f.selectClient(client.client_id, client.redirect_uris[0]);
+  let { params } = f.authParams(); params.set('redirect_uri', 'http://127.0.0.1:9877/callback');
+  assert.equal((await f.request('/oauth/authorize?' + params)).status, 400);
+  ({ params } = f.authParams()); params.delete('code_challenge'); params.delete('code_challenge_method');
+  const missingPkce = await f.request('/oauth/authorize?' + params);
+  assert.ok(missingPkce.status === 400 || new URL(missingPkce.headers.get('location')).searchParams.has('error'));
+  await f.authorize({ deny: true });
+  let auth = await f.authorize(); assert.equal((await f.exchange(auth.code, 'x'.repeat(43))).status, 400);
+  auth = await f.authorize(); const token = await (await f.exchange(auth.code, auth.verifier)).json();
+  assert.equal((await f.mcp(token.access_token)).status, 200);
+  await f.restart({ oauthDynamicRegistration: false });
+  assert.equal((await f.mcp(token.access_token)).status, 401);
+  assert.equal((await f.request('/oauth/authorize?' + f.authParams().params)).status, 400);
+});
+
+test('additional client configuration validates IDs, callbacks and legacy defaults', () => {
+  const client = { client_id: 'example', client_name: 'Example', redirect_uris: ['https://example.org/callback'] };
+  for (const callback of ['https://example.org/callback?tenant=1', 'http://localhost:1234/callback', 'http://127.0.0.1:1234/callback', 'http://[::1]:1234/callback']) assert.equal(validRedirect(callback), true);
+  for (const callback of ['javascript:alert(1)', 'http://192.168.1.2/callback', 'https://example.org/#', 'https://*.example.org/', 'https://user@example.org/', 'https://example.org/\\callback']) assert.equal(validRedirect(callback), false);
+  for (const value of ['{}', 'null', '[null]', JSON.stringify([client, client]), JSON.stringify([{ ...client, client_id: 'home-assistant-manager' }]), JSON.stringify([{ ...client, client_secret: 'no' }]), JSON.stringify([{ ...client, redirect_uris: ['http://example.org/'] }])]) assert.throws(() => parseClients(value));
+  assert.equal(parseClients(JSON.stringify([client]))[0].token_endpoint_auth_method, 'none');
+  const original = { ...process.env };
+  try {
+    process.env.HA_TOKEN = 'test'; process.env.BRIDGE_API_KEY = password;
+    delete process.env.OAUTH_CLIENTS; delete process.env.OAUTH_DYNAMIC_REGISTRATION; delete process.env.OAUTH_REDIRECT_URI;
+    assert.deepEqual(loadConfig().oauthClients, []); assert.equal(loadConfig().oauthDynamicRegistration, false);
+    assert.equal(loadConfig().oauthRedirectUri, redirect);
+    process.env.OAUTH_CLIENTS = JSON.stringify([client]); process.env.OAUTH_DYNAMIC_REGISTRATION = 'true';
+    assert.equal(loadConfig().oauthClients[0].client_id, 'example'); assert.equal(loadConfig().oauthDynamicRegistration, true);
+  } finally { for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key]; Object.assign(process.env, original); }
+});
+
+
+test('registration aliases cannot bypass policy/rate limits; native loopback ports remain supported', async t => {
+  const f = await fixture(t, undefined, undefined, { oauthDynamicRegistration: true });
+  for (const path of ['/oauth/register/', '/oauth/REGISTER', '/oauth/Register/']) {
+    const response = await f.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...registration, jwks_uri: 'http://127.0.0.1/' }) });
+    assert.equal(response.status, 404);
+  }
+  const response = await register(f, { ...registration, application_type: 'native', redirect_uris: ['http://127.0.0.1/callback'] });
+  const client = await response.json(); assert.equal(response.status, 201, JSON.stringify(client));
+  f.selectClient(client.client_id, 'http://127.0.0.1:9876/callback');
+  const auth = await f.authorize(); const tokens = await (await f.exchange(auth.code, auth.verifier)).json();
+  assert.equal((await f.mcp(tokens.access_token)).status, 200);
+});
+
+test('empty new defaults preserve legacy state; configured client changes revoke grants', async t => {
+  const f = await fixture(t);
+  const auth = await f.authorize(); const tokens = await (await f.exchange(auth.code, auth.verifier)).json();
+  const db = new DatabaseSync(join(f.dir, 'oauth.sqlite')); t.after(() => db.close());
+  const legacyFingerprint = createHash('sha256').update(JSON.stringify([issuer, password, redirect, false])).digest('hex');
+  assert.equal(db.prepare("SELECT value FROM settings WHERE id = 'context'").get().value, legacyFingerprint);
+  await f.restart({ oauthClients: [], oauthDynamicRegistration: false });
+  assert.equal((await f.mcp(tokens.access_token)).status, 200);
+  await f.restart({ oauthClients: parseClients(JSON.stringify([{ client_id: 'new-ai', client_name: 'New AI', redirect_uris: ['https://example.ai/callback'] }])) });
+  assert.equal((await f.mcp(tokens.access_token)).status, 401);
 });
