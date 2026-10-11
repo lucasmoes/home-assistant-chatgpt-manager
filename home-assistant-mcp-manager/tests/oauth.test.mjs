@@ -128,7 +128,8 @@ test('OAuth-authenticated clients initialize and discover all tools without a se
   assert.equal((await read(initialized)).result.protocolVersion, '2025-03-26');
   assert.equal((await call({ jsonrpc: '2.0', method: 'notifications/initialized' })).status, 202);
   const listed = await read(await call({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }));
-  assert.equal(listed.result.tools.length, 18);
+  assert.equal(listed.result.tools.length, 62);
+  assert.ok(listed.result.tools.some(tool => tool.name === "apply_approved_change"));
   for (const tool of listed.result.tools) {
     assert.equal(tool.inputSchema.type, 'object');
     assert.ok(tool.name && tool.description);
@@ -478,4 +479,40 @@ test('empty new defaults preserve legacy state; configured client changes revoke
   assert.equal((await f.mcp(tokens.access_token)).status, 200);
   await f.restart({ oauthClients: parseClients(JSON.stringify([{ client_id: 'new-ai', client_name: 'New AI', redirect_uris: ['https://example.ai/callback'] }])) });
   assert.equal((await f.mcp(tokens.access_token)).status, 401);
+});
+
+test('OAuth client identity follows MCP proposal calls; legacy write tools never bypass browser approval', async t => {
+  const { createServer } = await import('node:http');
+  const { WebSocketServer } = await import('ws');
+  let writes = 0;
+  const ha = createServer((req, res) => {
+    if (req.method === 'POST') writes++;
+    res.setHeader('Content-Type', 'application/json');
+    if (req.url === '/api/states' || req.url === '/api/services') res.end('[]');
+    else res.end(JSON.stringify({ alias: 'Before', sequence: [] }));
+  });
+  const ws = new WebSocketServer({ server: ha });
+  ws.on('connection', socket => {
+    socket.send(JSON.stringify({ type: 'auth_required' }));
+    socket.on('message', raw => {
+      const msg = JSON.parse(raw);
+      socket.send(JSON.stringify(msg.type === 'auth' ? { type: 'auth_ok' } : { id: msg.id, type: 'result', success: true, result: [] }));
+    });
+  });
+  ha.listen(0, '127.0.0.1'); await once(ha, 'listening');
+  t.after(async () => { ws.close(); await new Promise(resolve => ha.close(resolve)); });
+  const base = `127.0.0.1:${ha.address().port}`;
+  const f = await fixture(t, CLAUDE_CLIENT_ID, CLAUDE_REDIRECT_URI, { writeAccess: true, approvalPassword: 'owner-only-separate-password-32-characters', homeAssistantBaseUrl: `http://${base}/api`, homeAssistantWebSocketUrl: `ws://${base}/api/websocket` });
+  const { code, verifier } = await f.authorize();
+  const token = await (await f.exchange(code, verifier)).json();
+  const call = async (name, args) => {
+    const r = await f.request('/mcp', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Authorization: `Bearer ${token.access_token}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }) });
+    const text = await r.text(); return JSON.parse(text.split('\n').find(line => line.startsWith('data: ')).slice(6)).result;
+  };
+  const response = await call('update_script', { id: 'test', config: { alias: 'After', sequence: [] } });
+  assert.ok(!response.isError, JSON.stringify(response));
+  const proposal = JSON.parse(response.content[0].text);
+  assert.equal(proposal.proposer, CLAUDE_CLIENT_ID); assert.equal(proposal.status, 'pending'); assert.equal(writes, 0);
+  const attempted = await call('apply_approved_change', { change_id: proposal.id });
+  assert.ok(attempted.isError); assert.match(attempted.content[0].text, /owner approval/); assert.equal(writes, 0);
 });

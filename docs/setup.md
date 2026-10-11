@@ -19,7 +19,7 @@ For a Cloudflare Tunnel published application route:
 
 Use the Home Assistant address reachable from the tunnel connector. If Type and URL are separate fields, enter only `YOUR-HA-LAN-IP:8765` in URL.
 
-Route `/mcp`, `/oauth/*`, `/interaction/*` and `/.well-known/*`. Preserve methods, query strings, cookies and Authorization headers. A separate proxy sign-in page can block AI clients; this server provides its own OAuth login. Keep port 8765 behind HTTPS termination rather than exposing it directly to the internet.
+Route `/manage`, `/mcp`, `/oauth/*`, `/interaction/*` and `/.well-known/*`. Preserve methods, query strings, cookies and Authorization headers. A separate proxy sign-in page can block AI clients; this server provides its own OAuth login. Keep port 8765 behind HTTPS termination rather than exposing it directly to the internet.
 
 Home Assistant Cloud and the main dashboard normally reach Core on port 8123. They do not automatically expose this add-on. Core's built-in `/api/mcp` is a separate integration with different tools.
 
@@ -38,7 +38,15 @@ Enter the connection password only on your manager's HTTPS sign-in page. Review 
 
 ## Enable configuration changes
 
-Set `write_access: true`, save/restart and reconnect your AI clients to approve the changed access. This permits creating/updating automations, scripts and dashboards for all authorized clients. Dashboard saves replace the complete storage-mode configuration; inspect and preserve it before editing.
+1. Set a separate random `approval_password` of at least 32 characters. It must differ from `api_key` and the Home Assistant token. Keep it out of chat and client configuration.
+2. Set `write_access: true`, save/restart, and reconnect your AI clients.
+3. Ask for a change. The tool returns a preview and an HTTPS `/manage?change=…` link; nothing has been written yet.
+4. Open the link yourself, sign in with the approval password, inspect the exact fields, and approve or reject.
+5. Ask the same client to call `apply_approved_change` with the proposal id. The server rechecks the original, applies once, and reads it back.
+
+Proposals expire after 24 hours; browser sessions after 15 minutes. A changed original requires a fresh proposal and approval. Read [tool coverage and recovery](tools.md) before restoring a snapshot.
+
+**Upgrade behavior in 0.4.0:** existing create/update/save tools now return proposals. Existing installations with writes enabled also need `approval_password`; reads continue to work without it. The legacy bearer key never approves a change. A local deployment without `public_url` supports reads only.
 
 ## Existing installations
 

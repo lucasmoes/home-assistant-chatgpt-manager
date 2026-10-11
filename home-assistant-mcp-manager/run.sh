@@ -23,6 +23,7 @@ export ALLOW_LEGACY_API_KEY="$(jq -r '.allow_legacy_api_key // false' "$OPTIONS_
 export OAUTH_CLIENTS="$(jq -c '.oauth_clients // []' "$OPTIONS_FILE")"
 export OAUTH_DYNAMIC_REGISTRATION="$(jq -r '.oauth_dynamic_registration // false' "$OPTIONS_FILE")"
 export OAUTH_DATA_DIR="/data/oauth"
+export APPROVAL_PASSWORD="$(jq -r '.approval_password // empty' "$OPTIONS_FILE")"
 export BRIDGE_API_KEY="$API_KEY"
 export WRITE_ACCESS="$WRITE_ACCESS_VALUE"
 export LOG_LEVEL="$LOG_LEVEL_VALUE"

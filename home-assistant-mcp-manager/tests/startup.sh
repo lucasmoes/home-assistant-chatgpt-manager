@@ -42,3 +42,12 @@ check '{"api_key":"test-only","oauth_clients":[{"client_id":"local","client_name
 true
 https://chatgpt.com/connector_platform_oauth_redirect'
 printf 'Client configuration startup checks passed.\n'
+
+# Owner approval uses a distinct environment variable, empty until configured.
+cat > "$TEST_DIR/bin/node" <<'NODE'
+#!/bin/sh
+printf '%s\n' "$APPROVAL_PASSWORD"
+NODE
+check '{"api_key":"test-only"}' ''
+check '{"api_key":"test-only","approval_password":"owner-only-test-password"}' 'owner-only-test-password'
+printf 'Owner approval password startup checks passed.\n'

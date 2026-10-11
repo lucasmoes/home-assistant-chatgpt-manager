@@ -30,6 +30,7 @@ This is a self-hosted, single-household OAuth authorization/resource server. The
 - A fallback static public client (`home-assistant-manager`, auth method `none`) uses the exact `oauth_redirect_uri` option. A public client has no secret and still must prove PKCE possession and obtain owner consent.
 - Provider-neutral public clients come from `oauth_clients`. Optional DCR supports public and generated-secret clients using the same OAuth pipeline. See [registration policy and limits](clients.md). Client-credentials/implicit grants, arbitrary remote metadata fetches and wildcard redirects are rejected.
 - OAuth access requires a valid opaque access token issued by this provider, the `owner` account, exact MCP audience, `ha:manage` scope, and a live matching grant.
+- In 0.4.0, every write also requires owner browser approval using a separate `approval_password`. The `/manage` interface uses secure, HttpOnly, SameSite cookies, origin checks and CSRF protection. No MCP tool can approve changes. See [the review workflow](setup.md#enable-configuration-changes).
 - `ha:manage` authorizes the configured management capabilities. `write_access` is an additional server-side gate. Increasing or decreasing it invalidates sessions/grants at restart, so approval cannot silently gain write privileges.
 - `allow_legacy_api_key` is false by default. When explicitly enabled, the connection password also works as a bearer key and has the same configured management access. This compatibility option bypasses OAuth login by design; ChatGPT web does not need it.
 

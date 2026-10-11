@@ -1,18 +1,19 @@
 # Home Assistant MCP Manager
 
-Connect compatible AI clients over remote MCP with OAuth. See [client registration](../docs/clients.md), [ChatGPT](../docs/chatgpt.md), [Claude](../docs/claude.md) and [Gemini CLI](../docs/gemini.md). New 0.3.0 functionality requires updating the running add-on. The internal slug and data directory remain stable for upgrades.
+Connect compatible AI clients over remote MCP with OAuth. See [client registration](../docs/clients.md), [ChatGPT](../docs/chatgpt.md), [Claude](../docs/claude.md) and [Gemini CLI](../docs/gemini.md). New 0.4.0 functionality requires updating the running add-on. The internal slug and data directory remain stable for upgrades.
 
 ## Configuration
 
 | Option | Purpose |
 | --- | --- |
 | `api_key` | Connection password, at least 32 random characters with OAuth enabled. Enter it only on the add-on sign-in page. |
+| `approval_password` | Separate owner-only password, at least 32 random characters. Required for writes; use only on `/manage` browser review pages. |
 | `public_url` | Dedicated public HTTPS origin routed to port 8765, without a path. Enables OAuth; blank disables it. |
 | `oauth_redirect_uri` | Exact ChatGPT callback for the fallback static client; automatic CIMD uses published ChatGPT metadata. |
 | `oauth_clients` | Default `[]`. Additional public clients: `client_id`, `client_name`, `redirect_uris`; see client guide. |
 | `oauth_dynamic_registration` | Default false. Advertise RFC 7591 registration for compatible clients when enabled. |
 | `allow_legacy_api_key` | Default false. Explicitly allow bearer-password clients for developer compatibility. |
-| `write_access` | Default false for new installations. Allow creating/updating configuration when true. |
+| `write_access` | Default false for new installations. Allow proposals and owner-approved configuration writes when true. |
 | `log_level` | Reserved logging preference; currently loaded but not applied as a log filter. |
 
 Save and restart after changes. Changes to the password, public URL, callback, client list, DCR setting, or write policy revoke all OAuth sessions/grants; reconnect your AI clients afterwards. `/health` reports the running OAuth/write state. It does not check Home Assistant API access.
@@ -40,6 +41,7 @@ OAUTH_REDIRECT_URI=https://chatgpt.com/connector_platform_oauth_redirect
 OAUTH_CLIENTS=[]
 OAUTH_DYNAMIC_REGISTRATION=false
 ALLOW_LEGACY_API_KEY=false
+APPROVAL_PASSWORD=<separate-owner-password-required-for-writes>
 WRITE_ACCESS=false
 PORT=8765
 ```
@@ -47,3 +49,5 @@ PORT=8765
 Run `npm ci`, then `npm run dev`. OAuth requires an HTTPS tunnel to the local port. For a local bearer-only development client, omit `PUBLIC_URL` and explicitly set `ALLOW_LEGACY_API_KEY=true`. Never commit tokens, the `.oauth` directory, or add-on data.
 
 Run `npm test` for the build, OAuth/MCP HTTP tests, and startup regression tests (`jq` required). See the [authentication design](https://github.com/lucasmoes/home-assistant-mcp-manager/blob/main/docs/authentication.md).
+
+See the [tool guide](../docs/tools.md) for all 62 tools and the [owner approval workflow](../docs/setup.md#enable-configuration-changes). Change records and snapshots live in `/data/oauth/changes/changes.sqlite` (or below `OAUTH_DATA_DIR`). They contain private configuration; include them in protected backups.

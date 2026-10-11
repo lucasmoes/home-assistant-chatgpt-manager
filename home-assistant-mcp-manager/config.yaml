@@ -1,5 +1,5 @@
 name: Home Assistant MCP Manager
-version: "0.3.0"
+version: "0.4.0"
 slug: home_assistant_chatgpt_manager
 description: Manage Home Assistant configuration from compatible AI clients through MCP.
 url: https://github.com/lucasmoes/home-assistant-mcp-manager
@@ -16,6 +16,7 @@ ports_description:
   8765/tcp: MCP server
 options:
   api_key: null
+  approval_password: ""
   public_url: ""
   oauth_redirect_uri: "https://chatgpt.com/connector_platform_oauth_redirect"
   oauth_clients: []
@@ -25,6 +26,7 @@ options:
   log_level: info
 schema:
   api_key: password
+  approval_password: password
   public_url: str
   oauth_redirect_uri: str
   oauth_clients:
