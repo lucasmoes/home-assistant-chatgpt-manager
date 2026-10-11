@@ -51,6 +51,14 @@ The provider sees the configured canonical HTTPS host/protocol rather than calle
 
 Version 0.2.2 logs `[mcp]` request/response lines with fixed method/origin categories, authentication outcome and HTTP status. It never logs Authorization values, cookies, URLs, RPC bodies or Home Assistant data. For action-discovery failures, retry once and inspect these lines: `missing-token`, `token-rejected`, `origin-rejected`, or `accepted` plus response status distinguish authentication from transport failures. If no request lines appear, check the saved MCP URL and tunnel/security routing. HTTP 200 confirms a transport response, not acceptance of tool schemas by the client.
 
+### Diagnosing the saved server URL
+
+The ChatGPT **Server URL** and MCP **Resource** must be `public_url + /mcp`. The **Auth URL** is `public_url + /oauth/authorize`; using it as the Server URL can allow OAuth to finish while action discovery fails. In the 2026-10-11 live setup, replacing that incorrect connector with an automatic-CIMD connection to `/mcp` resolved the discovery error.
+
+A sequence of unauthenticated `401 access=missing-token` requests followed by authenticated `200 access=accepted` responses can occur during discovery. Distinguish that from repeated requests with no accepted response. Do not weaken authentication to make an unauthenticated probe succeed.
+
+The live check confirmed a connected account, successful tool refresh and tools becoming available. It did not complete a Home Assistant data read or configuration write; see [verification status](../README.md#verification-status).
+
 ## Validation
 
 Run `npm ci && npm test` in the add-on directory with Node 24+ and `jq` available. Tests run a real local HTTP bridge with temporary databases and no production Home Assistant credentials. They cover positive OAuth/MCP flows and security failures. The write test uses an unreachable Home Assistant target and must be rejected by the write gate before any HA request.

@@ -4,7 +4,7 @@ Connect **ChatGPT web** to a Home Assistant add-on that can inspect entities and
 
 **Version 0.2.0 adds browser-based OAuth authentication.** Install/update the add-on, give it a public HTTPS address, and sign in from ChatGPT. Each person connects to their own Home Assistant installation.
 
-> The implementation is covered by automated OAuth/MCP integration tests. A live ChatGPT connection to a user's installed add-on still needs to be verified after deployment. The shared multi-household gateway remains a separate future feature.
+> Live connection and tool discovery were verified with add-on 0.2.2 on 2026-10-11 using ChatGPT web and automatic CIMD. This verifies authentication and discovery, not a completed Home Assistant data read or configuration write. See [verification status](#verification-status). The shared multi-household gateway remains a separate future feature.
 
 ## What you need
 
@@ -21,7 +21,7 @@ In Home Assistant:
 
 1. Go to **Settings → Apps → App store → menu → Repositories**. Older releases call Apps “Add-ons.”
 2. Add `https://github.com/lucasmoes/home-assistant-chatgpt-manager`.
-3. Install **Home Assistant ChatGPT Manager**, or refresh/check for updates and update your existing installation to **0.2.1 or later**.
+3. Install **Home Assistant ChatGPT Manager**, or refresh/check for updates and update your existing installation to **0.2.2 or later**.
 4. Open **Configuration** and set the connection password (`api_key`). Keep it in your password manager. Do not paste it into a ChatGPT message.
 
 ### 2. Route a dedicated HTTPS hostname to the add-on
@@ -51,7 +51,7 @@ Fill in these settings through Home Assistant’s configuration form:
 | `allow_legacy_api_key` | `false` |
 | `write_access` | `false` for read-only access; `true` to allow configuration changes |
 
-Save and start/restart the add-on. Open `https://ha-manager.YOUR-DOMAIN/health` in your browser. Confirm `version` is `0.2.0` or later and `oauth_enabled` is `true`.
+Save and start/restart the add-on. Open `https://ha-manager.YOUR-DOMAIN/health` in your browser. Confirm `version` is `0.2.2` or later and `oauth_enabled` is `true`.
 
 Also open `https://ha-manager.YOUR-DOMAIN/.well-known/oauth-authorization-server`. It should return JSON with your HTTPS issuer, OAuth endpoints, and `code_challenge_methods_supported: ["S256"]`.
 
@@ -64,11 +64,24 @@ Open **Plugins → Add custom MCP server**. Some surfaces call this **Settings �
 | Field | Value |
 | --- | --- |
 | Name | Home Assistant Manager — My Home |
-| MCP URL | `https://ha-manager.YOUR-DOMAIN/mcp` |
+| Server URL / MCP URL | `https://ha-manager.YOUR-DOMAIN/mcp` |
 | Authentication | OAuth |
 | Client registration, if offered | Automatic / Client ID Metadata Document (CIMD) |
 
-Save/install the connection. Choose **Connect** when prompted. Your browser opens the add-on’s **Connect your home** page:
+The **Server URL must end in `/mcp`**. `/oauth/authorize` belongs only in the OAuth **Auth URL** field; it is not an MCP server URL. The add-on's `public_url` remains the origin without either path.
+
+Open **Advanced OAuth settings** and wait for discovery to finish. Confirm **Client Identifier Metadata Document (CIMD)**, the `ha:manage` scope, and the discovered values:
+
+| OAuth field | Expected value |
+| --- | --- |
+| Auth URL | `https://ha-manager.YOUR-DOMAIN/oauth/authorize` |
+| Token URL | `https://ha-manager.YOUR-DOMAIN/oauth/token` |
+| Authorization server base | `https://ha-manager.YOUR-DOMAIN` |
+| Resource | `https://ha-manager.YOUR-DOMAIN/mcp` |
+
+A blank Registration URL is expected: use CIMD, not DCR. Do not enter a client secret for automatic CIMD.
+
+Save/install with **Create as a plugin**, then choose **Continue to Home Assistant Manager — My Home** when prompted. A new sign-in opens the add-on’s **Connect your home** page; an existing valid session may complete without another password prompt:
 
 1. Check that the address is your dedicated add-on hostname.
 2. Enter the connection password from `api_key`. This is **not** your Home Assistant account password.
@@ -97,7 +110,11 @@ If your UI requires a client secret and cannot select `none`, use automatic CIMD
 
 ### 5. Verify the connection
 
-Ask ChatGPT:
+In the plugin's settings, confirm a connected account and a URL ending in `/mcp`, then use **Refresh tools**. Check that it finishes without a discovery error and that the manager's tools become available. If the current chat has not picked them up, select the connected plugin in a new chat.
+
+Add-on 0.2.2 logs authenticated MCP responses as `status=200 access=accepted`. This supports a successful transport check; it does not by itself prove a tool returned Home Assistant data.
+
+For an end-to-end read check, explicitly ask ChatGPT:
 
 > Use get_home_overview to inspect my Home Assistant. Do not change anything.
 
@@ -105,12 +122,25 @@ Confirm real tool results return. Then ask it to list existing automations or da
 
 To allow edits, set `write_access: true`, save/restart, and reconnect OAuth so you can approve the increased access. The tools include `create_automation`, `update_automation`, `create_script`, `update_script`, `create_dashboard`, and `save_dashboard`.
 
+### Verification status
+
+On 2026-10-11, a live add-on running **0.2.2** reported healthy with OAuth enabled. A fresh **Home Assistant Manager — My Home** connection using `/mcp` and automatic CIMD showed a connected account, completed tool refresh without an error, and produced authenticated `status=200 access=accepted` responses. The manager's tools subsequently became available in the chat.
+
+The earlier **Home Assistant** entry had `/oauth/authorize` saved as its server URL and reported **Authentication succeeded, action discovery failed**. The corrected connection resolved that discovery problem. The obsolete connector and separate **Home Assistant Manager** instruction plugin were then uninstalled, retaining the new connection.
+
+A real `get_home_overview` read was not completed: the attempted check during plugin cleanup was blocked by the client's approval review as outside that cleanup request. No Home Assistant configuration write was tested. These remain separate acceptance checks requiring an appropriate user request.
+
 ## Upgrading an existing connection
 
 - **Old URL ends with `/api/mcp`:** that is Home Assistant’s built-in MCP server, not this manager. Create/update the ChatGPT connection to your dedicated add-on address ending in `/mcp`. Updating the plugin’s instructions alone cannot change your tunnel or install the new add-on.
+- **Old URL ends with `/oauth/authorize`:** it is an authorization endpoint, not the MCP endpoint. If settings do not let you edit the server URL, create a replacement using `/mcp` and automatic CIMD, verify connection/tool discovery, then uninstall the obsolete entry.
 - **Old bearer client:** direct API-key authentication now requires `allow_legacy_api_key: true`. Leave it off for ChatGPT web.
 - Existing Home Assistant settings may retain their previous values. Check `write_access` explicitly after updating.
 - The built-in MCP Server integration is not required for this add-on. Do not change its OAuth settings using this guide: it is a different server.
+
+### Clean up duplicate plugins
+
+Keep the verified custom MCP connection. Once the replacement works, uninstall obsolete Home Assistant connectors and any separate instruction-only Home Assistant Manager plugin you no longer need. Uninstalling that package also removes its bundled skill from the installed tools; it does not delete this repository's skill source or uninstall the Home Assistant add-on. The instruction package is optional and does not establish OAuth access by itself. Do not remove unrelated plugins or the running add-on.
 
 ## Troubleshooting
 
@@ -126,6 +156,8 @@ To allow edits, set `write_access: true`, save/restart, and reconnect OAuth so y
 | `invalid_origin` when submitting sign-in or consent | Update the add-on to 0.2.1 or later, then start a fresh connection. Version 0.2.0 sent a referrer policy that caused browsers to submit `Origin: null`. |
 | Login expired / interaction error | Enable cookies, use the public HTTPS hostname, and start Connect again. Login interactions expire after 10 minutes. |
 | Wrong password | Enter the add-on’s connection password, not a Home Assistant account password. After 20 POST attempts in a minute, wait a minute. |
+| Authentication succeeded, action discovery failed | Check the saved **Server URL** first: it must end in `/mcp`, not `/oauth/authorize`. Recreate a wrongly addressed connector if its URL is not editable, using automatic CIMD. Refresh tools and inspect sanitized add-on logs. |
+| Repeated `401 access=missing-token` | Requests reached the add-on without an access token. Initial unauthenticated discovery requests can be normal; look for subsequent `access=accepted` responses. If none follow, check the saved URL and reconnect OAuth. Do not disable authentication. |
 | Login works but MCP returns 401 | Reconnect after password, URL, callback, or write-permission changes. Verify you are still using the correct `/mcp` endpoint. |
 | Health works but Home Assistant reads fail | Health is only a liveness check. Inspect add-on logs for Supervisor/Core API access problems. |
 | Writes disabled | Enable `write_access`, save/restart, and reconnect OAuth to approve the change. |
