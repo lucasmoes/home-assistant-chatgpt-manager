@@ -1,8 +1,13 @@
+import type { ClientMetadata } from "oidc-provider";
+import { chatGptRedirect, parseClients } from "./oauth-clients.js";
+
 export interface BridgeConfig {
   port: number;
   publicUrl: string;
   oauthRedirectUri: string;
   oauthDataDir: string;
+  oauthClients?: ClientMetadata[];
+  oauthDynamicRegistration?: boolean;
   allowLegacyApiKey: boolean;
   apiKey: string;
   writeAccess: boolean;
@@ -40,15 +45,13 @@ export function loadConfig(): BridgeConfig {
   const apiKey = required("BRIDGE_API_KEY", process.env.BRIDGE_API_KEY);
   if (publicUrl && apiKey.length < 32) throw new Error("OAuth requires an api_key of at least 32 characters");
   const oauthRedirectUri = process.env.OAUTH_REDIRECT_URI || "https://chatgpt.com/connector_platform_oauth_redirect";
-  // Exact ChatGPT callbacks only. Never allow arbitrary redirects or wildcard domains.
-  const redirect = new URL(oauthRedirectUri);
-  if (redirect.origin !== "https://chatgpt.com" || redirect.username || redirect.password || redirect.search || redirect.hash ||
-      !(redirect.pathname === "/connector_platform_oauth_redirect" || /^\/connector\/oauth\/[A-Za-z0-9_-]+$/.test(redirect.pathname))) {
-    throw new Error("OAUTH_REDIRECT_URI must be the exact ChatGPT OAuth callback URL");
-  }
+  // Legacy setting remains a ChatGPT-only compatibility preset.
+  if (!chatGptRedirect(oauthRedirectUri)) throw new Error("OAUTH_REDIRECT_URI must be the exact ChatGPT OAuth callback URL");
   return {
     publicUrl,
     oauthRedirectUri,
+    oauthClients: parseClients(process.env.OAUTH_CLIENTS ?? "[]"),
+    oauthDynamicRegistration: asBoolean(process.env.OAUTH_DYNAMIC_REGISTRATION, false),
     oauthDataDir: process.env.OAUTH_DATA_DIR ?? "/data/oauth",
     allowLegacyApiKey: asBoolean(process.env.ALLOW_LEGACY_API_KEY, false),
     port: Number(process.env.PORT ?? "8765"),

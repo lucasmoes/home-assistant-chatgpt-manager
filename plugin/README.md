@@ -1,8 +1,10 @@
-# Home Assistant Manager plugin
+# Home Assistant MCP Manager plugin
+
+The portable MCP endpoint is independent of this package. Other AI clients use their own remote MCP configuration; see [client setup](../docs/clients.md). The `com.openai` manifest extension is presentation metadata only and is not an authentication dependency. Preserve the existing plugin identity when updating.
 
 This optional instruction package complements the custom management add-on's MCP connection from **ChatGPT web**. The custom MCP plugin can connect without installing this separate package. A skill alone does not create or authenticate a connection. No desktop app is required.
 
-Follow the [main setup guide](../README.md#set-up-in-the-browser): update the add-on to 0.2.2+, route a dedicated HTTPS hostname to port 8765, set its `public_url` and connection password, then connect `https://YOUR-MANAGER-HOST/mcp` using OAuth in ChatGPT. Prefer automatic CIMD; the README provides manual public-client settings as a fallback.
+Follow the [main setup guide](../README.md#set-up-in-the-browser): update the add-on to 0.3.0+, route a dedicated HTTPS hostname to port 8765, set its `public_url` and connection password, then connect `https://YOUR-MANAGER-HOST/mcp` using OAuth in ChatGPT. Prefer automatic CIMD; the README provides manual public-client settings as a fallback.
 
 Use `/mcp` as the **Server URL**; `/oauth/authorize` belongs only in OAuth settings. The live setup on 2026-10-11 verified automatic CIMD, a connected account, tool refresh, and authenticated MCP responses with add-on 0.2.2. See the main guide's [verification status](../README.md#verification-status) for the limits of that check.
 

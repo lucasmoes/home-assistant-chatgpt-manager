@@ -46,6 +46,10 @@ export class OAuthStore {
     this.purge();
   }
 
+  clientCount(): number {
+    return Number(this.db.prepare("SELECT COUNT(*) AS count FROM records WHERE model = 'Client'").get()!.count);
+  }
+
   purge(): void {
     this.db.prepare("DELETE FROM records WHERE expires IS NOT NULL AND expires <= ?").run(Math.floor(Date.now() / 1000));
   }

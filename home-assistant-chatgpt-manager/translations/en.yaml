@@ -1,16 +1,22 @@
 configuration:
   api_key:
     name: Connection password
-    description: Use at least 32 random characters. Enter this only on the add-on’s browser sign-in page, never in ChatGPT messages. Changing it and restarting revokes all OAuth sessions.
+    description: Use at least 32 random characters. Enter this only on the add-on’s browser sign-in page, never in AI chat messages. Changing it and restarting revokes all OAuth sessions.
   public_url:
     name: Public HTTPS address
     description: Dedicated HTTPS origin routed to this add-on on port 8765, without /mcp. Leave blank to disable OAuth.
   oauth_redirect_uri:
     name: ChatGPT callback URL
     description: Used for manual OAuth configuration. Copy the exact callback shown by ChatGPT if it differs from the default. Automatic CIMD reads ChatGPT’s published callbacks.
+  oauth_clients:
+    name: Additional OAuth clients
+    description: Public clients with a unique client_id, client_name and exact HTTPS or loopback redirect_uris. Existing ChatGPT and Claude clients remain available.
+  oauth_dynamic_registration:
+    name: Allow dynamic OAuth registration
+    description: Let MCP clients register automatically. Registration does not grant home access; the owner must sign in and approve. Changing this setting revokes existing OAuth connections.
   allow_legacy_api_key:
     name: Allow direct API-key clients
-    description: Optional compatibility for developer MCP clients. Leave disabled for ChatGPT web.
+    description: Optional compatibility for developer MCP clients. Leave disabled for OAuth clients.
   write_access:
     name: Allow configuration writes
     description: Allow creating and updating automations, scripts and dashboards. Changing this setting requires reconnecting OAuth after restart.

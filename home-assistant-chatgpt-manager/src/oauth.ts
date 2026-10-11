@@ -2,30 +2,16 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import Provider, { errors } from "oidc-provider";
 import type { BridgeConfig } from "./config.js";
+import { builtinClients, chatGptMetadata, chatGptRedirect, validRedirect } from "./oauth-clients.js";
+export { CLIENT_ID, CLAUDE_CLIENT_ID, CLAUDE_REDIRECT_URI, chatGptRedirect } from "./oauth-clients.js";
 import { OAuthStore } from "./oauth-store.js";
 
 export const OAUTH_SCOPE = "ha:manage";
-export const CLIENT_ID = "home-assistant-manager";
-
 export function secretEqual(a: string, b: string): boolean {
   return timingSafeEqual(createHash("sha256").update(a).digest(), createHash("sha256").update(b).digest());
 }
 function escape(value: unknown): string {
   return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
-export function chatGptRedirect(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return u.origin === "https://chatgpt.com" && !u.username && !u.password && !u.search && !u.hash &&
-      (u.pathname === "/connector_platform_oauth_redirect" || /^\/connector\/oauth\/[A-Za-z0-9_-]+$/.test(u.pathname));
-  } catch { return false; }
-}
-function chatGptMetadata(value: string): boolean {
-  try {
-    const u = new URL(value);
-    return u.origin === "https://chatgpt.com" && !u.username && !u.password && !u.search && !u.hash &&
-      (u.pathname === "/oauth/client.json" || /^\/oauth\/[A-Za-z0-9_-]+\/client\.json$/.test(u.pathname));
-  } catch { return false; }
 }
 function json(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
@@ -42,7 +28,9 @@ export class OAuthServer {
   constructor(private config: BridgeConfig) {
     const issuer = config.publicUrl;
     this.resource = `${issuer}/mcp`;
-    this.store = new OAuthStore(config.oauthDataDir, JSON.stringify([issuer, config.apiKey, config.oauthRedirectUri, config.writeAccess]));
+    this.store = new OAuthStore(config.oauthDataDir, JSON.stringify([issuer, config.apiKey, config.oauthRedirectUri, config.writeAccess,
+      ...((config.oauthClients?.length || config.oauthDynamicRegistration) ? [config.oauthClients ?? [], !!config.oauthDynamicRegistration] : []),
+    ]));
     this.provider = new Provider(issuer, {
       adapter: model => this.store.adapter(model),
       jwks: this.store.keys.jwks,
@@ -51,15 +39,30 @@ export class OAuthServer {
         long: { secure: true, httpOnly: true, sameSite: "lax" },
         short: { secure: true, httpOnly: true, sameSite: "lax" },
       },
-      clients: [{
-        client_id: CLIENT_ID,
-        client_name: "ChatGPT",
-        redirect_uris: [config.oauthRedirectUri],
-        grant_types: ["authorization_code", "refresh_token"],
-        response_types: ["code"],
-        token_endpoint_auth_method: "none",
-      }],
+      clients: [...builtinClients(config.oauthRedirectUri), ...(config.oauthClients ?? [])],
+      extraClientMetadata: {
+        // Run policy once for every registration, including metadata without this key.
+        properties: ["manager_policy"],
+        validator: (ctx, _key, _value, metadata) => {
+          if (ctx?.oidc.route !== "registration") return;
+          const allowed = ["client_name", "redirect_uris", "grant_types", "response_types",
+            "token_endpoint_auth_method", "application_type", "scope", "client_uri", "logo_uri", "contacts"];
+          if (Object.keys(ctx.oidc.body ?? {}).some(k => !allowed.includes(k)) ||
+              !metadata.redirect_uris?.length || metadata.redirect_uris.length > 10 ||
+              !metadata.redirect_uris.every(validRedirect) ||
+              !["none", "client_secret_basic", "client_secret_post"].includes(metadata.token_endpoint_auth_method ?? "") ||
+              !metadata.grant_types?.includes("authorization_code") ||
+              metadata.grant_types.some(g => !["authorization_code", "refresh_token"].includes(g)) ||
+              metadata.response_types?.some(r => r !== "code") ||
+              (metadata.client_name !== undefined && metadata.client_name.length > 128) ||
+              (metadata.scope && metadata.scope.split(" ").some(s => ![OAUTH_SCOPE, "openid", "offline_access"].includes(s)))) {
+            throw new errors.InvalidClientMetadata("Only authorization-code MCP clients with HTTPS or loopback callbacks are supported");
+          }
+          if (this.store.clientCount() >= 100) throw new errors.InvalidClientMetadata("Client registration capacity reached");
+        },
+      },
       features: {
+        registration: { enabled: !!config.oauthDynamicRegistration, initialAccessToken: false, issueRegistrationAccessToken: false },
         devInteractions: { enabled: false },
         userinfo: { enabled: false },
         rpInitiatedLogout: { enabled: false },
@@ -86,12 +89,12 @@ export class OAuthServer {
       issueRefreshToken: (_ctx, client) => client.grantTypeAllowed("refresh_token"),
       rotateRefreshToken: true,
       ttl: { AccessToken: 600, AuthorizationCode: 60, Interaction: 600, Session: 86400, Grant: 2592000, RefreshToken: 2592000 },
-      routes: { authorization: "/oauth/authorize", token: "/oauth/token", revocation: "/oauth/revoke", jwks: "/oauth/jwks" },
+      routes: { registration: "/oauth/register", authorization: "/oauth/authorize", token: "/oauth/token", revocation: "/oauth/revoke", jwks: "/oauth/jwks" },
       interactions: { url: (_ctx, interaction) => `/interaction/${interaction.uid}` },
       findAccount: (_ctx, id) => id === "owner" ? { accountId: id, claims: () => ({ sub: id }) } : undefined,
       renderError: async (ctx, output) => {
         ctx.type = "html";
-        ctx.body = this.page("Connection failed", `<p>${escape(output.error)}: ${escape(output.error_description)}</p><p>Return to ChatGPT and start the connection again.</p>`);
+        ctx.body = this.page("Connection failed", `<p>${escape(output.error)}: ${escape(output.error_description)}</p><p>Return to your AI assistant and start the connection again.</p>`);
       },
     });
     this.provider.proxy = true;
@@ -102,7 +105,7 @@ export class OAuthServer {
   }
 
   private page(title: string, body: string): string {
-    return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · Home Assistant Manager</title><style>body{font:17px system-ui;background:#101827;color:#eef4ff;margin:0;padding:7vh 20px}main{max-width:480px;margin:auto;padding:30px;background:#1c283b;border-radius:18px}h1{font-size:26px}p{line-height:1.6}input,button{box-sizing:border-box;width:100%;font:inherit;padding:13px;border-radius:8px;margin:12px 0}input{background:#101827;color:white;border:1px solid #69809e}button{background:#6aa9ff;border:0;color:#071c36;cursor:pointer}.secondary{background:#344761;color:white}small{overflow-wrap:anywhere;color:#bbcde5}</style><main><small>HOME ASSISTANT MANAGER</small><h1>${escape(title)}</h1>${body}</main></html>`;
+    return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)} · Home Assistant MCP Manager</title><style>body{font:17px system-ui;background:#101827;color:#eef4ff;margin:0;padding:7vh 20px}main{max-width:480px;margin:auto;padding:30px;background:#1c283b;border-radius:18px}h1{font-size:26px}p{line-height:1.6}input,button{box-sizing:border-box;width:100%;font:inherit;padding:13px;border-radius:8px;margin:12px 0}input{background:#101827;color:white;border:1px solid #69809e}button{background:#6aa9ff;border:0;color:#071c36;cursor:pointer}.secondary{background:#344761;color:white}small{overflow-wrap:anywhere;color:#bbcde5}</style><main><small>HOME ASSISTANT MCP MANAGER</small><h1>${escape(title)}</h1>${body}</main></html>`;
   }
 
   private csrf(uid: string): string { return createHmac("sha256", this.store.keys.cookies[0]).update(uid).digest("hex"); }
@@ -141,7 +144,7 @@ export class OAuthServer {
     res.setHeader("referrer-policy", path.startsWith("/interaction/") ? "same-origin" : "no-referrer");
     res.setHeader("x-content-type-options", "nosniff");
     res.setHeader("x-frame-options", "DENY");
-    res.setHeader("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; frame-ancestors 'none'; base-uri 'none'");
+    res.setHeader("content-security-policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
     // This service is behind an HTTPS tunnel. Canonical origin comes exclusively
     // from configuration, never from untrusted Host/X-Forwarded-* headers.
     const canonical = new URL(this.config.publicUrl);
@@ -149,6 +152,18 @@ export class OAuthServer {
     req.headers["x-forwarded-host"] = canonical.host;
     req.headers["x-forwarded-proto"] = "https";
     delete req.headers["x-forwarded-for"];
+    // The provider router accepts case variants and a trailing slash. Do not
+    // let aliases bypass the registration gate or its rate/capacity limits.
+    if (path.toLowerCase().replace(/\/$/, "") === "/oauth/register" && path !== "/oauth/register") {
+      json(res, 404, { error: "not_found" }); return true;
+    }
+    if (path === "/oauth/register") {
+      if (!this.config.oauthDynamicRegistration) { json(res, 404, { error: "not_found" }); return true; }
+      if (req.method !== "POST") { json(res, 405, { error: "method_not_allowed" }); return true; }
+      if (this.limited("register", 10) || this.store.clientCount() >= 100) {
+        res.setHeader("retry-after", "60"); json(res, 429, { error: "registration_limit" }); return true;
+      }
+    }
     if (path === "/oauth/authorize" && this.limited("authorize", 60)) {
       res.setHeader("retry-after", "60"); json(res, 429, { error: "slow_down" }); return true;
     }
@@ -166,13 +181,21 @@ export class OAuthServer {
       const detail = await this.provider.interactionDetails(req, res);
       if (path !== `/interaction/${detail.uid}`) { json(res, 404, { error: "not_found" }); return; }
       const { uid, prompt, params } = detail;
+      const client = await this.provider.Client.find(String(params.client_id));
+      const callback = String(params.redirect_uri);
+      if (!client || !client.redirectUriAllowed(callback) || !validRedirect(callback)) {
+        json(res, 400, { error: "invalid_client" }); return;
+      }
+      // Browser form submissions may follow the OAuth redirect. Permit only
+      // this interaction's validated callback origin, never an entire provider list.
+      res.setHeader("content-security-policy", `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${new URL(callback).origin}; frame-ancestors 'none'; base-uri 'none'`);
       if (req.method === "GET") {
         const hidden = `<input type="hidden" name="csrf" value="${this.csrf(uid)}">`;
         let body: string;
         if (prompt.name === "login") {
           body = `<p>Enter the connection password from this add-on’s <strong>api_key</strong> setting. This is separate from your Home Assistant account password.</p><form method="post">${hidden}<label>Connection password<input name="password" type="password" autocomplete="current-password" required maxlength="1024"></label><button name="action" value="login">Sign in</button></form>`;
         } else if (prompt.name === "consent") {
-          body = `<p>Allow ChatGPT to access this Home Assistant installation?</p><p>${this.config.writeAccess ? "Read entities and configuration, and create or update automations, scripts and dashboards." : "Read entities and configuration. Configuration changes are disabled in the add-on."}</p><small>Server: ${escape(this.config.publicUrl)}<br>Client: ${escape(params.client_id)}</small><form method="post">${hidden}<button name="action" value="allow">Allow connection</button><button class="secondary" name="action" value="deny">Cancel</button></form>`;
+          body = `<p>Allow ${escape(client.clientName || "this MCP client")} to access this Home Assistant installation?</p><p>${this.config.writeAccess ? "Read entities and configuration, and create or update automations, scripts and dashboards." : "Read entities and configuration. Configuration changes are disabled in the add-on."}</p><small>Server: ${escape(this.config.publicUrl)}<br>Client: ${escape(params.client_id)}<br>Callback: ${escape(callback)}</small><p>Client names are labels, not verified identities. Approve only a connection you started and a callback you recognize.</p><form method="post">${hidden}<button name="action" value="allow">Allow connection</button><button class="secondary" name="action" value="deny">Cancel</button></form>`;
         } else { json(res, 400, { error: "unsupported_interaction" }); return; }
         res.setHeader("content-type", "text/html; charset=utf-8");
         res.end(this.page(prompt.name === "login" ? "Connect your home" : "Approve connection", body));
@@ -212,7 +235,7 @@ export class OAuthServer {
         await this.provider.interactionFinished(req, res, { consent: { grantId: await grant.save() } }, { mergeWithLastSubmission: true });
       } else json(res, 400, { error: "invalid_interaction" });
     } catch {
-      if (!res.headersSent) json(res, 400, { error: "interaction_expired", message: "Return to ChatGPT and connect again." });
+      if (!res.headersSent) json(res, 400, { error: "interaction_expired", message: "Return to your AI client and connect again." });
       else res.end();
     }
   }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Present the server/add-on as Home Assistant MCP Manager while retaining the installed slug, directory, plugin identity, repository URL and existing OAuth client IDs.
+- Isolate ChatGPT/Claude presets and add configurable public OAuth clients.
+- Add opt-in RFC 7591 dynamic registration with public or generated-secret authentication, registration limits and metadata validation.
+- Show actual client labels and callbacks in consent, with an interaction-specific form CSP.
+- Preserve ChatGPT CIMD/signed assertions, PKCE, resource binding, persistent tokens, refresh rotation and write gating.
+- Add multi-client setup guides and HTTP regression tests. Live Claude/Gemini CLI deployment verification is still pending.
+
 ## 0.2.2
 
 - Add safe MCP connection diagnostics: request method, origin category, authentication outcome and response status, without credentials or request contents.
