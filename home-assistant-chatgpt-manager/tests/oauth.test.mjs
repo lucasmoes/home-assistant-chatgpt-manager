@@ -8,7 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { once } from 'node:events';
 import { createBridge } from '../dist/app.js';
 import { validatePublicUrl } from '../dist/config.js';
-import { chatGptRedirect } from '../dist/oauth.js';
+import { chatGptRedirect, CLAUDE_CLIENT_ID, CLAUDE_REDIRECT_URI } from '../dist/oauth.js';
 
 const issuer = 'https://manager.example.com';
 const redirect = 'https://chatgpt.com/connector_platform_oauth_redirect';
@@ -298,4 +298,24 @@ test('login attempts are bounded and bearer compatibility is explicit opt-in', a
   assert.equal((await f.mcp(password)).status, 401);
   await f.restart({ allowLegacyApiKey: true });
   assert.equal((await f.mcp(password)).status, 200);
+});
+
+
+test('Claude OAuth client is registered without changing ChatGPT OAuth', async t => {
+  const f = await fixture(t);
+  assert.equal(CLAUDE_CLIENT_ID, 'home-assistant-manager-claude');
+  assert.equal(CLAUDE_REDIRECT_URI, 'https://claude.ai/api/mcp/auth_callback');
+  const claude = await f.request('/oauth/authorize?' + new URLSearchParams({
+    response_type: 'code', client_id: CLAUDE_CLIENT_ID, redirect_uri: CLAUDE_REDIRECT_URI,
+    scope: 'ha:manage', state: 'claude-test', code_challenge: createHash('sha256').update('a'.repeat(43)).digest('base64url'),
+    code_challenge_method: 'S256', resource: issuer + '/mcp'
+  }));
+  assert.equal(claude.status, 303);
+  assert.match(claude.headers.get('location') ?? '', /interaction/);
+  const wrong = await f.request('/oauth/authorize?' + new URLSearchParams({
+    response_type: 'code', client_id: CLAUDE_CLIENT_ID, redirect_uri: redirect,
+    scope: 'ha:manage', state: 'wrong', code_challenge: createHash('sha256').update('a'.repeat(43)).digest('base64url'),
+    code_challenge_method: 'S256', resource: issuer + '/mcp'
+  }));
+  assert.equal(wrong.status, 400);
 });
